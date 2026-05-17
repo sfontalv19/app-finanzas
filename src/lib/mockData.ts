@@ -1,0 +1,157 @@
+import type { Cuenta, Categoria, Movimiento, CompraCuotas } from '../types'
+
+// Cuentas de ejemplo
+export const cuentasMock: Cuenta[] = [
+  {
+    id: '1',
+    nombre: 'Nequi',
+    tipo: 'debito',
+    saldoInicial: 500000,
+    saldoActual: 450000,
+    color: '#A78BFA',
+    icono: 'wallet',
+    creadaEn: new Date('2025-01-15'),
+    archivada: false,
+  },
+  {
+    id: '2',
+    nombre: 'Bancolombia Ahorros',
+    tipo: 'debito',
+    saldoInicial: 2000000,
+    saldoActual: 1850000,
+    color: '#F9A8D4',
+    icono: 'piggy-bank',
+    creadaEn: new Date('2025-01-10'),
+    archivada: false,
+  },
+  {
+    id: '3',
+    nombre: 'Tarjeta Visa',
+    tipo: 'credito',
+    saldoInicial: 0,
+    saldoActual: 0,
+    cupoTotal: 3000000,
+    cupoDisponible: 2400000,
+    color: '#FCA5A5',
+    icono: 'credit-card',
+    creadaEn: new Date('2025-01-05'),
+    archivada: false,
+  },
+  {
+  id: '4',
+  nombre: 'Efectivo',
+  tipo: 'debito',
+  saldoInicial: 100000,
+  saldoActual: 85000,
+  color: '#86EFAC',
+  icono: 'banknote',
+  creadaEn: new Date('2025-01-20'),
+  archivada: false,
+},
+]
+
+// Categorías predefinidas
+export const categoriasMock: Categoria[] = [
+  // Egresos
+  { id: 'c1', nombre: 'Comida', tipo: 'egreso', icono: 'utensils', color: '#EF4444', esPredefinida: true },
+  { id: 'c2', nombre: 'Transporte', tipo: 'egreso', icono: 'car', color: '#F59E0B', esPredefinida: true },
+  { id: 'c3', nombre: 'Ropa', tipo: 'egreso', icono: 'shirt', color: '#EC4899', esPredefinida: true },
+  { id: 'c4', nombre: 'Salud', tipo: 'egreso', icono: 'heart', color: '#10B981', esPredefinida: true },
+  { id: 'c5', nombre: 'Entretenimiento', tipo: 'egreso', icono: 'film', color: '#8B5CF6', esPredefinida: true },
+  { id: 'c6', nombre: 'Servicios', tipo: 'egreso', icono: 'zap', color: '#06B6D4', esPredefinida: true },
+  { id: 'c7', nombre: 'Hogar', tipo: 'egreso', icono: 'home', color: '#84CC16', esPredefinida: true },
+  { id: 'c8', nombre: 'Otros', tipo: 'egreso', icono: 'more-horizontal', color: '#6B7280', esPredefinida: true },
+  // Ingresos
+  { id: 'c9', nombre: 'Salario', tipo: 'ingreso', icono: 'briefcase', color: '#10B981', esPredefinida: true },
+  { id: 'c10', nombre: 'Freelance', tipo: 'ingreso', icono: 'laptop', color: '#3B82F6', esPredefinida: true },
+  { id: 'c11', nombre: 'Regalo', tipo: 'ingreso', icono: 'gift', color: '#EC4899', esPredefinida: true },
+  { id: 'c12', nombre: 'Otros', tipo: 'ingreso', icono: 'plus-circle', color: '#6B7280', esPredefinida: true },
+]
+
+// Movimientos de ejemplo
+export const movimientosMock: Movimiento[] = [
+  {
+    id: 'm1',
+    tipo: 'egreso',
+    monto: 25000,
+    cuentaId: '1',
+    categoriaId: 'c1',
+    descripcion: 'Almuerzo con amigas',
+    fecha: new Date('2026-04-18'),
+    creadoEn: new Date('2026-04-18'),
+  },
+  {
+    id: 'm2',
+    tipo: 'egreso',
+    monto: 15000,
+    cuentaId: '1',
+    categoriaId: 'c2',
+    descripcion: 'Uber',
+    fecha: new Date('2026-04-17'),
+    creadoEn: new Date('2026-04-17'),
+  },
+  {
+    id: 'm3',
+    tipo: 'ingreso',
+    monto: 2500000,
+    cuentaId: '2',
+    categoriaId: 'c9',
+    descripcion: 'Salario abril',
+    fecha: new Date('2026-04-15'),
+    creadoEn: new Date('2026-04-15'),
+  },
+  {
+    id: 'm4',
+    tipo: 'egreso',
+    monto: 80000,
+    cuentaId: '2',
+    categoriaId: 'c6',
+    descripcion: 'Internet',
+    fecha: new Date('2026-04-10'),
+    creadoEn: new Date('2026-04-10'),
+  },
+  {
+    id: 'm5',
+    tipo: 'transferencia',
+    monto: 200000,
+    cuentaId: '2',
+    cuentaDestinoId: '1',
+    descripcion: 'Pase a Nequi',
+    fecha: new Date('2026-04-05'),
+    creadoEn: new Date('2026-04-05'),
+  },
+]
+
+// Compras a cuotas de ejemplo
+export const comprasCuotasMock: CompraCuotas[] = [
+  {
+    id: 'cc1',
+    cuentaId: '3',
+    montoTotal: 600000,
+    numeroCuotas: 6,
+    valorCuota: 100000,
+    tieneIntereses: false,
+    categoriaId: 'c3',
+    descripcion: 'Chaqueta nueva',
+    fechaCompra: new Date('2026-03-20'),
+    primerMesPago: new Date('2026-04-01'),
+    cuotasPagadas: 1,
+    cuotasRestantes: 5,
+    activa: true,
+  },
+  {
+    id: 'cc2',
+    cuentaId: '3',
+    montoTotal: 1200000,
+    numeroCuotas: 12,
+    valorCuota: 110000,
+    tieneIntereses: true,
+    categoriaId: 'c5',
+    descripcion: 'Viaje a Cartagena',
+    fechaCompra: new Date('2026-02-15'),
+    primerMesPago: new Date('2026-03-01'),
+    cuotasPagadas: 2,
+    cuotasRestantes: 10,
+    activa: true,
+  },
+]
