@@ -53,7 +53,7 @@ export default function Login() {
             Finanzas App
           </h1>
           <p className="text-gray-500 mt-2 text-sm">
-            Controla tu plata con estilo 💜
+            Controla tu dinero con estilo 💜
           </p>
         </div>
         
