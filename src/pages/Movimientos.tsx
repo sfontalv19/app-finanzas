@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react'
-import { Search, Filter, X, TrendingUp, TrendingDown, ArrowLeftRight } from 'lucide-react'
+import { Search, Filter, X, TrendingUp, TrendingDown, ArrowLeftRight, Loader2 } from 'lucide-react'
 import MovimientoItem from '../components/MovimientoItem'
 import BottomSheet from '../components/ui/BottomSheet'
-import { cuentasMock, categoriasMock, movimientosMock } from '../lib/mockData'
+import { useCuentas } from '../hooks/useCuentas'
+import { useCategorias } from '../hooks/useCategorias'
+import { useMovimientos } from '../hooks/useMovimientos'
 import { formatearDinero } from '../utils/formatters'
 import type { TipoMovimiento } from '../types'
 
@@ -15,9 +17,15 @@ export default function Movimientos() {
   const [filtroCuentaId, setFiltroCuentaId] = useState<string | null>(null)
   const [filtroCategoriaId, setFiltroCategoriaId] = useState<string | null>(null)
   
+  const { data: movimientos, isLoading } = useMovimientos()
+  const { data: cuentas } = useCuentas()
+  const { data: categorias } = useCategorias()
+  
   // Movimientos filtrados
   const movimientosFiltrados = useMemo(() => {
-    return movimientosMock
+    if (!movimientos) return []
+    
+    return movimientos
       .filter((mov) => {
         // Filtro por tipo
         if (filtroTipo !== 'todos' && mov.tipo !== filtroTipo) return false
@@ -38,8 +46,7 @@ export default function Movimientos() {
         
         return true
       })
-      .sort((a, b) => b.fecha.getTime() - a.fecha.getTime())
-  }, [busqueda, filtroTipo, filtroCuentaId, filtroCategoriaId])
+  }, [movimientos, busqueda, filtroTipo, filtroCuentaId, filtroCategoriaId])
   
   // Agrupar por mes/año
   const movimientosAgrupados = useMemo(() => {
@@ -80,7 +87,19 @@ export default function Movimientos() {
     setFiltroCuentaId(null)
     setFiltroCategoriaId(null)
   }
-
+  
+  // Estado de carga
+  if (isLoading) {
+    return (
+      <div className="px-4 pt-6 pb-4">
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">Movimientos</h1>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+        </div>
+      </div>
+    )
+  }
+  
   return (
     <>
       <div className="px-4 pt-6 pb-4 space-y-4">
@@ -95,7 +114,7 @@ export default function Movimientos() {
           </p>
         </header>
         
-        {/* Stats del periodo */}
+        {/* Stats */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white rounded-2xl p-3 border border-gray-100">
             <div className="flex items-center gap-1 text-emerald-600 mb-0.5">
@@ -117,7 +136,7 @@ export default function Movimientos() {
           </div>
         </div>
         
-        {/* Barra de búsqueda + filtros */}
+        {/* Búsqueda + filtros */}
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -155,13 +174,13 @@ export default function Movimientos() {
             )}
             {filtroCuentaId && (
               <FiltroChip
-                label={cuentasMock.find((c) => c.id === filtroCuentaId)?.nombre ?? '?'}
+                label={cuentas?.find((c) => c.id === filtroCuentaId)?.nombre ?? '?'}
                 onRemove={() => setFiltroCuentaId(null)}
               />
             )}
             {filtroCategoriaId && (
               <FiltroChip
-                label={categoriasMock.find((c) => c.id === filtroCategoriaId)?.nombre ?? '?'}
+                label={categorias?.find((c) => c.id === filtroCategoriaId)?.nombre ?? '?'}
                 onRemove={() => setFiltroCategoriaId(null)}
               />
             )}
@@ -173,11 +192,15 @@ export default function Movimientos() {
             </button>
           </div>
         )}
-
-        {/* Lista de movimientos agrupados por mes */}
+        
+        {/* Lista */}
         {movimientosAgrupados.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-500 text-sm">No se encontraron movimientos</p>
+            <p className="text-gray-500 text-sm">
+              {movimientos && movimientos.length === 0
+                ? 'Aún no has registrado movimientos'
+                : 'No se encontraron movimientos con esos filtros'}
+            </p>
             {hayFiltrosActivos && (
               <button
                 onClick={limpiarFiltros}
@@ -196,12 +219,12 @@ export default function Movimientos() {
                 </h2>
                 <div className="space-y-2">
                   {grupo.movimientos.map((mov) => {
-                    const cuenta = cuentasMock.find((c) => c.id === mov.cuentaId)
+                    const cuenta = cuentas?.find((c) => c.id === mov.cuentaId)
                     const cuentaDestino = mov.cuentaDestinoId
-                      ? cuentasMock.find((c) => c.id === mov.cuentaDestinoId)
+                      ? cuentas?.find((c) => c.id === mov.cuentaDestinoId)
                       : undefined
                     const categoria = mov.categoriaId
-                      ? categoriasMock.find((c) => c.id === mov.categoriaId)
+                      ? categorias?.find((c) => c.id === mov.categoriaId)
                       : undefined
                     
                     return (
@@ -262,50 +285,54 @@ export default function Movimientos() {
           </div>
           
           {/* Cuenta */}
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              Cuenta
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <BotonFiltro
-                activo={filtroCuentaId === null}
-                onClick={() => setFiltroCuentaId(null)}
-                label="Todas"
-              />
-              {cuentasMock.filter((c) => !c.archivada).map((cuenta) => (
+          {cuentas && cuentas.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                Cuenta
+              </p>
+              <div className="grid grid-cols-2 gap-2">
                 <BotonFiltro
-                  key={cuenta.id}
-                  activo={filtroCuentaId === cuenta.id}
-                  onClick={() => setFiltroCuentaId(cuenta.id)}
-                  label={cuenta.nombre}
+                  activo={filtroCuentaId === null}
+                  onClick={() => setFiltroCuentaId(null)}
+                  label="Todas"
                 />
-              ))}
+                {cuentas.filter((c) => !c.archivada).map((cuenta) => (
+                  <BotonFiltro
+                    key={cuenta.id}
+                    activo={filtroCuentaId === cuenta.id}
+                    onClick={() => setFiltroCuentaId(cuenta.id)}
+                    label={cuenta.nombre}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           
           {/* Categoría */}
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              Categoría
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <BotonFiltro
-                activo={filtroCategoriaId === null}
-                onClick={() => setFiltroCategoriaId(null)}
-                label="Todas"
-              />
-              {categoriasMock.map((cat) => (
+          {categorias && categorias.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                Categoría
+              </p>
+              <div className="grid grid-cols-2 gap-2">
                 <BotonFiltro
-                  key={cat.id}
-                  activo={filtroCategoriaId === cat.id}
-                  onClick={() => setFiltroCategoriaId(cat.id)}
-                  label={cat.nombre}
+                  activo={filtroCategoriaId === null}
+                  onClick={() => setFiltroCategoriaId(null)}
+                  label="Todas"
                 />
-              ))}
+                {categorias.map((cat) => (
+                  <BotonFiltro
+                    key={cat.id}
+                    activo={filtroCategoriaId === cat.id}
+                    onClick={() => setFiltroCategoriaId(cat.id)}
+                    label={cat.nombre}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           
-          {/* Botones de acción */}
+          {/* Botones */}
           <div className="flex gap-2 pt-2">
             <button
               type="button"

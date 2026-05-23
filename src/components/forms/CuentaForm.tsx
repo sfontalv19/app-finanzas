@@ -101,6 +101,7 @@ export default function CuentaForm({ cuenta, onSubmit, onCancel }: CuentaFormPro
       </div>
       
       {/* Saldo inicial */}
+     {!esEdicion ? (
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1.5">
           {tipoSeleccionado === 'credito' ? 'Deuda actual' : 'Saldo inicial'}
@@ -121,6 +122,21 @@ export default function CuentaForm({ cuenta, onSubmit, onCancel }: CuentaFormPro
           <p className="text-xs text-rose-500 mt-1">{errors.saldoInicial.message}</p>
         )}
       </div>
+    ) : (
+      <div className="bg-purple-50/50 border border-purple-100 rounded-xl p-3 flex items-start gap-2.5">
+        <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <span className="text-purple-600 text-xs font-bold">i</span>
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-purple-700">
+            ¿Quieres ajustar el saldo?
+          </p>
+          <p className="text-[11px] text-purple-600/80 mt-0.5">
+            El saldo se actualiza registrando movimientos. Si te equivocaste al crear la cuenta, registra un ingreso o egreso de ajuste.
+          </p>
+        </div>
+      </div>
+    )}
       
       {/* Cupo total (solo crédito) */}
       {tipoSeleccionado === 'credito' && (

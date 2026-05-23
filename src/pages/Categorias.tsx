@@ -1,9 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import CategoriaForm from '../components/forms/CategoriaForm'
-import { categoriasMock } from '../lib/mockData'
+import {
+  useCategorias,
+  useCrearCategoria,
+  useActualizarCategoria,
+  useEliminarCategoria,
+} from '../hooks/useCategorias'
 import { obtenerIcono } from '../utils/iconos'
 import type { Categoria } from '../types'
 import type { CategoriaFormData } from '../lib/schemas'
@@ -14,8 +19,14 @@ export default function Categorias() {
   const [categoriaEditando, setCategoriaEditando] = useState<Categoria | null>(null)
   const [tipoNuevaCategoria, setTipoNuevaCategoria] = useState<'ingreso' | 'egreso'>('egreso')
   
-  const categoriasIngreso = categoriasMock.filter((c) => c.tipo === 'ingreso')
-  const categoriasEgreso = categoriasMock.filter((c) => c.tipo === 'egreso')
+  // Hooks de React Query
+  const { data: categorias, isLoading } = useCategorias()
+  const crearMutation = useCrearCategoria()
+  const actualizarMutation = useActualizarCategoria()
+  const eliminarMutation = useEliminarCategoria()
+  
+  const categoriasIngreso = categorias?.filter((c) => c.tipo === 'ingreso') ?? []
+  const categoriasEgreso = categorias?.filter((c) => c.tipo === 'egreso') ?? []
   
   const handleAbrirNueva = (tipo: 'ingreso' | 'egreso') => {
     setCategoriaEditando(null)
@@ -28,26 +39,56 @@ export default function Categorias() {
     setModalAbierto(true)
   }
   
-  const handleSubmit = (datos: CategoriaFormData) => {
-    if (categoriaEditando) {
-      console.log('Editar categoría:', categoriaEditando.id, datos)
-    } else {
-      console.log('Nueva categoría:', datos)
+  const handleSubmit = async (datos: CategoriaFormData) => {
+    try {
+      if (categoriaEditando) {
+        await actualizarMutation.mutateAsync({ id: categoriaEditando.id, datos })
+      } else {
+        await crearMutation.mutateAsync(datos)
+      }
+      setModalAbierto(false)
+      setCategoriaEditando(null)
+    } catch (err) {
+      console.error('Error al guardar categoría:', err)
+      alert('Hubo un problema al guardar. Intenta de nuevo.')
     }
-    setModalAbierto(false)
-    setCategoriaEditando(null)
   }
   
-  const handleEliminar = (categoria: Categoria) => {
+  const handleEliminar = async (categoria: Categoria) => {
     if (categoria.esPredefinida) {
       alert('Las categorías predefinidas no se pueden eliminar')
       return
     }
-    if (confirm(`¿Eliminar la categoría "${categoria.nombre}"?`)) {
-      console.log('Eliminar categoría:', categoria.id)
+    if (!confirm(`¿Eliminar la categoría "${categoria.nombre}"?`)) return
+    
+    try {
+      await eliminarMutation.mutateAsync(categoria.id)
+    } catch (err) {
+      console.error('Error al eliminar:', err)
+      alert('No se pudo eliminar. Intenta de nuevo.')
     }
   }
-
+  
+  // Estado de carga
+  if (isLoading) {
+    return (
+      <div className="px-4 pt-6 pb-4">
+        <header className="flex items-center gap-2 mb-6">
+          <button
+            onClick={() => navigate(-1)}
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 active:scale-95 transition-all"
+          >
+            <ArrowLeft className="w-5 h-5 text-gray-700" />
+          </button>
+          <h1 className="text-xl font-bold text-gray-800">Categorías</h1>
+        </header>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+        </div>
+      </div>
+    )
+  }
+  
   return (
     <>
       <div className="px-4 pt-6 pb-4 space-y-5">
@@ -65,7 +106,7 @@ export default function Categorias() {
               Categorías
             </h1>
             <p className="text-gray-500 text-xs mt-0.5">
-              {categoriasMock.length} categorías
+              {categorias?.length ?? 0} categorías
             </p>
           </div>
         </header>

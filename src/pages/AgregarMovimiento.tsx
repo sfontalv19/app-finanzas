@@ -1,17 +1,33 @@
 import { useNavigate } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ArrowLeft, TrendingUp, TrendingDown, ArrowLeftRight, ArrowDown, Layers } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, ArrowLeftRight, ArrowDown, Layers, Loader2 } from 'lucide-react'
 import SelectorCuenta from '../components/forms/SelectorCuenta'
 import SelectorCategoria from '../components/forms/SelectorCategoria'
 import SelectorFecha from '../components/forms/SelectorFecha'
-import { cuentasMock, categoriasMock } from '../lib/mockData'
+import { useCuentas } from '../hooks/useCuentas'
+import { useCategorias } from '../hooks/useCategorias'
+import { useCrearMovimiento } from '../hooks/useMovimientos'
 import { movimientoSchema, type MovimientoFormData } from '../lib/schemas'
 import type { TipoMovimiento } from '../types'
 import { formatearDinero } from '../utils/formatters'
+import { useCrearCompraCuotas } from '../hooks/useComprasCuotas'
 
 export default function AgregarMovimiento() {
   const navigate = useNavigate()
+  
+  const { data: cuentas } = useCuentas()
+  const { data: categorias } = useCategorias()
+  
+  // 🔍 DEBUG: Ver todas las cuentas
+  console.log('📊 Todas las cuentas:', cuentas)
+  console.log('📊 Longitud:', cuentas?.length)
+  cuentas?.forEach(c => {
+    console.log(`  - ${c.nombre}: archivada=${c.archivada}, tipo=${c.tipo}`)
+  })
+  
+  const crearMovimientoMutation = useCrearMovimiento()
+  const crearCompraCuotasMutation = useCrearCompraCuotas()
   
   const {
     register,
@@ -41,47 +57,66 @@ export default function AgregarMovimiento() {
   const numeroCuotas = watch('numeroCuotas')
   const monto = watch('monto')
   
-  const cuentaSeleccionada = cuentasMock.find((c) => c.id === cuentaIdActual)
-  const cuentaDestinoSeleccionada = cuentasMock.find((c) => c.id === cuentaDestinoIdActual)
-  const categoriaSeleccionada = categoriasMock.find((c) => c.id === categoriaIdActual)
+  console.log('🎯 cuentaIdActual:', cuentaIdActual)
+  console.log('🎯 cuentaDestinoIdActual:', cuentaDestinoIdActual)
+  
+  const cuentasActivas = cuentas?.filter((c) => c.archivada !== true) ?? []
+  
+  console.log('✅ Cuentas activas filtradas:', cuentasActivas.length)
+  cuentasActivas.forEach(c => {
+    console.log(`  ✓ ${c.nombre} (tipo: ${c.tipo})`)
+  })
+  
+  const cuentaSeleccionada = cuentasActivas.find((c) => c.id === cuentaIdActual)
+  const cuentaDestinoSeleccionada = cuentasActivas.find((c) => c.id === cuentaDestinoIdActual)
+  const categoriaSeleccionada = categorias?.find((c) => c.id === categoriaIdActual)
   
   const tipoCategoria = tipoActual === 'ingreso' ? 'ingreso' : 'egreso'
   
-  // Mostrar opción de cuotas solo si: es egreso + cuenta seleccionada es crédito
   const puedeSerCuotas = tipoActual === 'egreso' && cuentaSeleccionada?.tipo === 'credito'
   
-  // Calcular valor cuota automático si no tiene intereses
   const valorCuotaCalculado = !tieneIntereses && numeroCuotas && monto
     ? monto / numeroCuotas
     : 0
   
-  const handleCambiarTipo = (nuevoTipo: TipoMovimiento) => {
+ const handleCambiarTipo = (nuevoTipo: TipoMovimiento) => {
     setValue('tipo', nuevoTipo)
     setValue('categoriaId', undefined)
     setValue('cuentaDestinoId', undefined)
     setValue('esCompraCuotas', false)
+    setValue('numeroCuotas', undefined)
+    setValue('valorCuota', undefined)
+    setValue('tieneIntereses', false)
   }
   
   const handleCambiarCuenta = (cuentaId: string) => {
     setValue('cuentaId', cuentaId)
-    const nuevaCuenta = cuentasMock.find((c) => c.id === cuentaId)
+    const nuevaCuenta = cuentasActivas.find((c) => c.id === cuentaId)
     if (nuevaCuenta?.tipo !== 'credito') {
       setValue('esCompraCuotas', false)
     }
   }
   
-  const onSubmit = (datos: MovimientoFormData) => {
-    console.log('Nuevo movimiento:', datos)
-    navigate(-1)
+  const onSubmit = async (datos: MovimientoFormData) => {
+    try {
+      if (datos.esCompraCuotas) {
+        await crearCompraCuotasMutation.mutateAsync(datos)
+      } else {
+        await crearMovimientoMutation.mutateAsync(datos)
+      }
+      navigate(-1)
+    } catch (err) {
+      console.error('Error al crear movimiento:', err)
+      alert('Hubo un problema al guardar el movimiento. Intenta de nuevo.')
+    }
   }
   
-  // Color del monto según tipo
   const getColorMonto = () => {
     if (tipoActual === 'ingreso') return 'text-emerald-600'
     if (tipoActual === 'egreso') return 'text-rose-600'
     return 'text-purple-600'
   }
-
+  
   return (
     <div className="pb-6">
       
@@ -163,7 +198,7 @@ export default function AgregarMovimiento() {
             <p className="text-xs text-rose-500 mt-1">{errors.monto.message}</p>
           )}
         </div>
-
+        
         {/* Selector de cuenta origen */}
         <Controller
           control={control}
@@ -171,10 +206,11 @@ export default function AgregarMovimiento() {
           render={() => (
             <div>
               <SelectorCuenta
-                cuentas={cuentasMock}
+                cuentas={cuentasActivas}
                 cuentaSeleccionada={cuentaSeleccionada}
                 onSelect={handleCambiarCuenta}
                 label={tipoActual === 'transferencia' ? 'Desde' : 'Cuenta'}
+                placeholder="Selecciona una cuenta"
               />
               {errors.cuentaId && (
                 <p className="text-xs text-rose-500 mt-1">{errors.cuentaId.message}</p>
@@ -200,7 +236,7 @@ export default function AgregarMovimiento() {
             render={({ field }) => (
               <div>
                 <SelectorCuenta
-                  cuentas={cuentasMock}
+                  cuentas={cuentasActivas}
                   cuentaSeleccionada={cuentaDestinoSeleccionada}
                   onSelect={field.onChange}
                   label="Hacia"
@@ -215,7 +251,7 @@ export default function AgregarMovimiento() {
           />
         )}
         
-        {/* Toggle de compra a cuotas (solo egreso + cuenta crédito) */}
+        {/* Toggle de compra a cuotas */}
         {puedeSerCuotas && (
           <Controller
             control={control}
@@ -256,12 +292,10 @@ export default function AgregarMovimiento() {
             )}
           />
         )}
-
+        
         {/* Campos extra para compra a cuotas */}
         {esCompraCuotas && (
           <div className="bg-purple-50/50 border border-purple-100 rounded-2xl p-4 space-y-4">
-            
-            {/* Número de cuotas */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Número de cuotas
@@ -278,7 +312,6 @@ export default function AgregarMovimiento() {
               )}
             </div>
             
-            {/* ¿Tiene intereses? */}
             <Controller
               control={control}
               name="tieneIntereses"
@@ -290,7 +323,10 @@ export default function AgregarMovimiento() {
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => field.onChange(false)}
+                        onClick={() => {
+                      field.onChange(false)
+                      setValue('valorCuota', undefined)
+                        }}
                       className={`px-4 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
                         !field.value
                           ? 'border-purple-400 bg-white text-purple-700'
@@ -301,7 +337,9 @@ export default function AgregarMovimiento() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => field.onChange(true)}
+                       onClick={() => {
+                          field.onChange(true)
+                        }}
                       className={`px-4 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
                         field.value
                           ? 'border-purple-400 bg-white text-purple-700'
@@ -315,7 +353,6 @@ export default function AgregarMovimiento() {
               )}
             />
             
-            {/* Valor de la cuota: calculado o manual */}
             {tieneIntereses ? (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -331,9 +368,6 @@ export default function AgregarMovimiento() {
                     className="w-full pl-8 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-transparent transition"
                   />
                 </div>
-                <p className="text-[11px] text-gray-500 mt-1">
-                  Ingresa el valor exacto que te dijo tu banco
-                </p>
               </div>
             ) : valorCuotaCalculado > 0 && (
               <div className="bg-white rounded-xl p-3 border border-purple-100">
@@ -350,16 +384,16 @@ export default function AgregarMovimiento() {
             )}
           </div>
         )}
-
-        {/* Selector de categoría (no aplica para transferencia) */}
-        {tipoActual !== 'transferencia' && (
+        
+        {/* Selector de categoría (no transferencia) */}
+        {tipoActual !== 'transferencia' && categorias && (
           <Controller
             control={control}
             name="categoriaId"
             render={({ field }) => (
               <div>
                 <SelectorCategoria
-                  categorias={categoriasMock}
+                  categorias={categorias}
                   categoriaSeleccionada={categoriaSeleccionada}
                   onSelect={field.onChange}
                   tipoFiltro={tipoCategoria}
@@ -403,9 +437,17 @@ export default function AgregarMovimiento() {
         {/* Botón de guardar */}
         <button
           type="submit"
-          className="w-full py-3.5 bg-gradient-to-r from-purple-400 to-pink-400 text-white font-semibold rounded-xl shadow-lg shadow-purple-200 active:scale-[0.98] transition-all mt-6"
+         disabled={crearMovimientoMutation.isPending || crearCompraCuotasMutation.isPending}
+          className="w-full py-3.5 bg-gradient-to-r from-purple-400 to-pink-400 text-white font-semibold rounded-xl shadow-lg shadow-purple-200 active:scale-[0.98] transition-all mt-6 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          Guardar movimiento
+          {(crearMovimientoMutation.isPending || crearCompraCuotasMutation.isPending) ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Guardando...
+            </>
+          ) : (
+            'Guardar movimiento'
+          )}
         </button>
       </form>
     </div>

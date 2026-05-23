@@ -1,22 +1,43 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Wallet, Eye, EyeOff, Mail, Lock } from 'lucide-react'
+import { Wallet, Eye, EyeOff, Mail, Lock, Loader2 } from 'lucide-react'
+import { iniciarSesion, iniciarSesionConGoogle, traducirErrorAuth } from '../services/authService'
 
 export default function Login() {
   const navigate = useNavigate()
-  
-  // Estado de los campos del formulario
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mostrarPassword, setMostrarPassword] = useState(false)
+  const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState('')
   
-  // Cuando el usuario envía el formulario
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Por ahora solo navegamos al dashboard
-    // Cuando conectemos Firebase acá validaremos credenciales
-    console.log('Login intento:', { email, password })
-    navigate('/dashboard')
+    setError('')
+    setCargando(true)
+    
+    try {
+      await iniciarSesion(email, password)
+      navigate('/dashboard')
+    } catch (err) {
+      setError(traducirErrorAuth(err))
+    } finally {
+      setCargando(false)
+    }
+  }
+  
+  const handleGoogle = async () => {
+    setError('')
+    setCargando(true)
+    
+    try {
+      await iniciarSesionConGoogle()
+      navigate('/dashboard')
+    } catch (err) {
+      setError(traducirErrorAuth(err))
+    } finally {
+      setCargando(false)
+    }
   }
   
   return (
@@ -29,10 +50,10 @@ export default function Login() {
             <Wallet className="w-8 h-8 text-white" strokeWidth={2.5} />
           </div>
           <h1 className="text-3xl font-bold text-gray-800">
-            Vato App
+            Finanzas App
           </h1>
           <p className="text-gray-500 mt-2 text-sm">
-            Para que mi amorcito maneje sus finanzas 💜
+            Controla tu plata con estilo 💜
           </p>
         </div>
         
@@ -52,7 +73,8 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tu@email.com"
                 required
-                className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-transparent transition"
+                disabled={cargando}
+                className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-transparent transition disabled:opacity-50"
               />
             </div>
           </div>
@@ -70,7 +92,8 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full pl-11 pr-11 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-transparent transition"
+                disabled={cargando}
+                className="w-full pl-11 pr-11 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-transparent transition disabled:opacity-50"
               />
               <button
                 type="button"
@@ -86,6 +109,13 @@ export default function Login() {
             </div>
           </div>
           
+          {/* Mensaje de error */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+              {error}
+            </div>
+          )}
+          
           {/* Link olvidé contraseña */}
           <div className="text-right">
             <button
@@ -99,9 +129,17 @@ export default function Login() {
           {/* Botón principal */}
           <button
             type="submit"
-            className="w-full py-3 bg-gradient-to-r from-purple-400 to-pink-400 text-white font-semibold rounded-xl shadow-lg shadow-purple-200 hover:shadow-xl hover:shadow-purple-300 active:scale-[0.98] transition-all"
+            disabled={cargando}
+            className="w-full py-3 bg-gradient-to-r from-purple-400 to-pink-400 text-white font-semibold rounded-xl shadow-lg shadow-purple-200 hover:shadow-xl hover:shadow-purple-300 active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            Iniciar sesión
+            {cargando ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Iniciando sesión...
+              </>
+            ) : (
+              'Iniciar sesión'
+            )}
           </button>
         </form>
         
@@ -114,10 +152,12 @@ export default function Login() {
           <div className="flex-1 border-t border-gray-200"></div>
         </div>
         
-        {/* Botón Google (por ahora solo visual) */}
+        {/* Botón Google */}
         <button
           type="button"
-          className="w-full py-3 bg-white border border-gray-200 rounded-xl font-medium text-gray-700 hover:bg-gray-50 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+          onClick={handleGoogle}
+          disabled={cargando}
+          className="w-full py-3 bg-white border border-gray-200 rounded-xl font-medium text-gray-700 hover:bg-gray-50 active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

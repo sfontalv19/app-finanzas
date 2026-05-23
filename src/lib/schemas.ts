@@ -63,7 +63,7 @@ export const movimientoSchema = z.object({
   // Campos para compra a cuotas
   esCompraCuotas: z.boolean().optional(),
   numeroCuotas: z.number().int().min(2).max(48).optional(),
-  valorCuota: z.number().positive().optional(),
+  valorCuota: z.number().optional(),
   tieneIntereses: z.boolean().optional(),
 }).refine(
   (data) => {

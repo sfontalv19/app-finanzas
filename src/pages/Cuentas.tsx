@@ -1,17 +1,19 @@
 import { useState } from 'react'
-import { Plus, Wallet, CreditCard } from 'lucide-react'
+import { Plus, Wallet, CreditCard, Loader2 } from 'lucide-react'
 import AccountListItem from '../components/AccountListItem'
 import Modal from '../components/ui/Modal'
 import CuentaForm from '../components/forms/CuentaForm'
-import { cuentasMock } from '../lib/mockData'
+import { useCuentas, useCrearCuenta } from '../hooks/useCuentas'
 import { formatearDinero } from '../utils/formatters'
 import type { CuentaFormData } from '../lib/schemas'
 
 export default function Cuentas() {
   const [modalAbierto, setModalAbierto] = useState(false)
   
-  const cuentasActivas = cuentasMock.filter((c) => !c.archivada)
+  const { data: cuentas, isLoading } = useCuentas()
+  const crearMutation = useCrearCuenta()
   
+  const cuentasActivas = cuentas?.filter((c) => !c.archivada) ?? []
   const cuentasDebito = cuentasActivas.filter((c) => c.tipo === 'debito')
   const cuentasCredito = cuentasActivas.filter((c) => c.tipo === 'credito')
   
@@ -25,10 +27,26 @@ export default function Cuentas() {
     return total + deuda
   }, 0)
   
-  const handleCrearCuenta = (datos: CuentaFormData) => {
-    // Por ahora solo console.log, después conectaremos con Firebase
-    console.log('Nueva cuenta a crear:', datos)
-    setModalAbierto(false)
+  const handleCrearCuenta = async (datos: CuentaFormData) => {
+    try {
+      await crearMutation.mutateAsync(datos)
+      setModalAbierto(false)
+    } catch (err) {
+      console.error('Error al crear cuenta:', err)
+      alert('Hubo un problema al crear la cuenta. Intenta de nuevo.')
+    }
+  }
+  
+  // Estado de carga
+  if (isLoading) {
+    return (
+      <div className="px-4 pt-6 pb-4">
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">Mis cuentas</h1>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+        </div>
+      </div>
+    )
   }
   
   return (

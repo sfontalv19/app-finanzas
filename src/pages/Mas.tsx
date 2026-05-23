@@ -1,5 +1,8 @@
-import { Link, useNavigate } from 'react-router-dom'
-import { ChevronRight, Tag, Layers, User, LogOut, Bell, HelpCircle, Sparkles } from 'lucide-react'
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { ChevronRight, Tag, Layers, User, LogOut, Bell, HelpCircle, Sparkles, Loader2 } from 'lucide-react'
+import { cerrarSesion } from '../services/authService'
+import { useAuth } from '../contexts/AuthContext'
 
 interface MenuItemProps {
   to?: string
@@ -41,11 +44,20 @@ function MenuItem({ to, onClick, icon, label, description, iconBg, iconColor, da
 }
 
 export default function Mas() {
-  const navigate = useNavigate()
+  const { usuario } = useAuth()
+  const [cerrandoSesion, setCerrandoSesion] = useState(false)
   
-  const handleCerrarSesion = () => {
-    if (confirm('¿Estás segura de cerrar sesión?')) {
-      navigate('/login')
+  const handleCerrarSesion = async () => {
+    if (!confirm('¿Estás segura de cerrar sesión?')) return
+    
+    setCerrandoSesion(true)
+    try {
+      await cerrarSesion()
+      // No necesitamos navegar manualmente, RutaProtegida lo hace
+    } catch (err) {
+      console.error('Error al cerrar sesión:', err)
+      alert('Hubo un problema al cerrar sesión. Intenta de nuevo.')
+      setCerrandoSesion(false)
     }
   }
   
@@ -73,10 +85,11 @@ export default function Mas() {
           </div>
           <div className="flex-1">
             <p className="text-white font-bold text-lg">
-              Mi cuenta
+              {usuario?.displayName ?? 'Mi Cuenta'}
             </p>
-            <p className="text-white/80 text-sm">
-              Gestiona tu perfil
+
+            <p className="text-white/80 text-sm truncate">
+            {usuario?.email ?? 'Gestiona tu perfil'}
             </p>
           </div>
           <Sparkles className="w-5 h-5 text-white/60" />
@@ -130,14 +143,20 @@ export default function Mas() {
       
       {/* Cerrar sesión */}
       <section className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <MenuItem
-          icon={<LogOut className="w-5 h-5" strokeWidth={2.5} />}
-          label="Cerrar sesión"
-          iconBg="#FCA5A520"
-          iconColor="#EF4444"
-          onClick={handleCerrarSesion}
-          danger
-        />
+       <MenuItem
+        icon={
+          cerrandoSesion ? (
+            <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2.5} />
+          ) : (
+            <LogOut className="w-5 h-5" strokeWidth={2.5} />
+          )
+        }
+        label={cerrandoSesion ? 'Cerrando sesión...' : 'Cerrar sesión'}
+        iconBg="#FCA5A520"
+        iconColor="#EF4444"
+        onClick={handleCerrarSesion}
+        danger
+      />
       </section>
       
       {/* Versión */}
@@ -147,3 +166,4 @@ export default function Mas() {
     </div>
   )
 }
+

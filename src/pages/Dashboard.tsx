@@ -1,23 +1,30 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Loader2 } from 'lucide-react'
 import BalanceCard from '../components/BalanceCard'
 import AccountCard from '../components/AccountCard'
 import CuotaItem from '../components/CuotaItem'
 import MovimientoItem from '../components/MovimientoItem'
 import GraficoGastos from '../components/GraficoGastos'
-import {
-  cuentasMock,
-  movimientosMock,
-  comprasCuotasMock,
-  categoriasMock,
-} from '../lib/mockData'
+import { useCuentas } from '../hooks/useCuentas'
+import { useCategorias } from '../hooks/useCategorias'
+import { useMovimientos } from '../hooks/useMovimientos'
+import { useComprasCuotas } from '../hooks/useComprasCuotas'
 import { calcularCuotasDelMes } from '../utils/cuotas'
 import { agruparGastosPorCategoria } from '../utils/graficos'
 import { formatearDinero } from '../utils/formatters'
 
 export default function Dashboard() {
-  // Calcular balance total
-  const balanceTotal = cuentasMock.reduce((total, cuenta) => {
+  const { data: cuentas, isLoading: cargandoCuentas } = useCuentas()
+  const { data: movimientos, isLoading: cargandoMovimientos } = useMovimientos()
+  const { data: categorias } = useCategorias()
+  const { data: comprasCuotas } = useComprasCuotas()
+  
+  const cargando = cargandoCuentas || cargandoMovimientos
+  
+  // Cálculos solo cuando hay datos
+  const cuentasActivas = cuentas?.filter((c) => !c.archivada) ?? []
+  
+  const balanceTotal = cuentasActivas.reduce((total, cuenta) => {
     if (cuenta.tipo === 'debito') {
       return total + cuenta.saldoActual
     } else {
@@ -26,9 +33,8 @@ export default function Dashboard() {
     }
   }, 0)
   
-  // Movimientos del mes actual
   const ahora = new Date()
-  const movimientosMes = movimientosMock.filter((mov) => {
+  const movimientosMes = (movimientos ?? []).filter((mov) => {
     return (
       mov.fecha.getMonth() === ahora.getMonth() &&
       mov.fecha.getFullYear() === ahora.getFullYear()
@@ -48,22 +54,37 @@ export default function Dashboard() {
     year: 'numeric',
   }).format(ahora)
   
-  const cuentasActivas = cuentasMock.filter((c) => !c.archivada)
-  const comprasActivas = comprasCuotasMock.filter((c) => c.activa)
+  // TODO: compras a cuotas siguen siendo mock
+  const comprasActivas = (comprasCuotas ?? []).filter((c) => c.activa)
   const totalCuotasMes = calcularCuotasDelMes(comprasActivas, ahora)
   
-  // Últimos 5 movimientos
-  const movimientosRecientes = [...movimientosMock]
+  const movimientosRecientes = [...(movimientos ?? [])]
     .sort((a, b) => b.fecha.getTime() - a.fecha.getTime())
     .slice(0, 5)
   
-  // Datos del gráfico (gastos del mes agrupados por categoría)
-  const datosGrafico = agruparGastosPorCategoria(movimientosMes, categoriasMock)
+  const datosGrafico = categorias 
+    ? agruparGastosPorCategoria(movimientosMes, categorias)
+    : []
+  
+  // Estado de carga
+  if (cargando) {
+    return (
+      <div className="px-4 pt-6 pb-4">
+        <header className="mb-6">
+          <p className="text-gray-500 text-sm">¡Hola! 👋</p>
+          <h1 className="text-2xl font-bold text-gray-800 mt-0.5">Tus finanzas</h1>
+        </header>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+        </div>
+      </div>
+    )
+  }
   
   return (
     <div className="px-4 pt-6 pb-4 space-y-6">
       
-      {/* Header con saludo */}
+      {/* Header */}
       <header>
         <p className="text-gray-500 text-sm">¡Hola! 👋</p>
         <h1 className="text-2xl font-bold text-gray-800 mt-0.5">
@@ -81,43 +102,60 @@ export default function Dashboard() {
         egresosMes={egresosMes}
       />
       
-      {/* Sección de cuentas */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold text-gray-800">
-            Mis cuentas
-          </h2>
+      {/* Cuentas */}
+      {cuentasActivas.length > 0 ? (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold text-gray-800">
+              Mis cuentas
+            </h2>
+            <Link
+              to="/cuentas"
+              className="flex items-center gap-0.5 text-sm text-purple-500 font-medium hover:text-purple-600"
+            >
+              Ver todas
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+          
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+            {cuentasActivas.map((cuenta) => (
+              <AccountCard key={cuenta.id} cuenta={cuenta} />
+            ))}
+          </div>
+        </section>
+      ) : (
+        <section className="bg-purple-50 border border-purple-100 rounded-2xl p-5 text-center">
+          <p className="text-sm font-semibold text-purple-700">¡Empieza creando tu primera cuenta!</p>
+          <p className="text-xs text-purple-600/80 mt-1">
+            Agrega Nequi, Bancolombia, tu efectivo, o lo que uses para mover tu plata.
+          </p>
           <Link
             to="/cuentas"
-            className="flex items-center gap-0.5 text-sm text-purple-500 font-medium hover:text-purple-600"
+            className="inline-block mt-3 text-sm text-purple-500 font-semibold hover:text-purple-600"
           >
-            Ver todas
-            <ChevronRight className="w-4 h-4" />
+            Ir a cuentas →
           </Link>
-        </div>
-        
-        <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-          {cuentasActivas.map((cuenta) => (
-            <AccountCard key={cuenta.id} cuenta={cuenta} />
-          ))}
-        </div>
-      </section>
+        </section>
+      )}
       
-      {/* Sección de gastos por categoría */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold text-gray-800">
-            Gastos por categoría
-          </h2>
-          <span className="text-xs text-gray-400 capitalize">
-            {nombreMes}
-          </span>
-        </div>
-        
-        <GraficoGastos datos={datosGrafico} totalGastos={egresosMes} />
-      </section>
+      {/* Gráfico de gastos por categoría */}
+      {datosGrafico.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold text-gray-800">
+              Gastos por categoría
+            </h2>
+            <span className="text-xs text-gray-400 capitalize">
+              {nombreMes}
+            </span>
+          </div>
+          
+          <GraficoGastos datos={datosGrafico} totalGastos={egresosMes} />
+        </section>
+      )}
       
-      {/* Sección de compras a cuotas */}
+      {/* Compras a cuotas (todavía mock) */}
       {comprasActivas.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3">
@@ -125,7 +163,7 @@ export default function Dashboard() {
               Compras a cuotas
             </h2>
             <Link
-              to="/mas"
+              to="/compras-cuotas"
               className="flex items-center gap-0.5 text-sm text-purple-500 font-medium hover:text-purple-600"
             >
               Ver todas
@@ -134,9 +172,7 @@ export default function Dashboard() {
           </div>
           
           <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-2xl p-4 mb-3 border border-pink-100">
-            <p className="text-xs font-medium text-pink-700">
-              A pagar este mes
-            </p>
+            <p className="text-xs font-medium text-pink-700">A pagar este mes</p>
             <p className="text-2xl font-bold text-gray-800 mt-0.5">
               {formatearDinero(totalCuotasMes)}
             </p>
@@ -147,20 +183,16 @@ export default function Dashboard() {
           
           <div className="space-y-2">
             {comprasActivas.map((compra) => {
-              const cuenta = cuentasMock.find((c) => c.id === compra.cuentaId)
+              const cuenta = cuentas?.find((c) => c.id === compra.cuentaId)
               return (
-                <CuotaItem
-                  key={compra.id}
-                  compra={compra}
-                  cuenta={cuenta}
-                />
+                <CuotaItem key={compra.id} compra={compra} cuenta={cuenta} />
               )
             })}
           </div>
         </section>
       )}
       
-      {/* Sección de movimientos recientes */}
+      {/* Movimientos recientes */}
       {movimientosRecientes.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3">
@@ -178,12 +210,12 @@ export default function Dashboard() {
           
           <div className="space-y-2">
             {movimientosRecientes.map((movimiento) => {
-              const cuenta = cuentasMock.find((c) => c.id === movimiento.cuentaId)
+              const cuenta = cuentas?.find((c) => c.id === movimiento.cuentaId)
               const cuentaDestino = movimiento.cuentaDestinoId
-                ? cuentasMock.find((c) => c.id === movimiento.cuentaDestinoId)
+                ? cuentas?.find((c) => c.id === movimiento.cuentaDestinoId)
                 : undefined
               const categoria = movimiento.categoriaId
-                ? categoriasMock.find((c) => c.id === movimiento.categoriaId)
+                ? categorias?.find((c) => c.id === movimiento.categoriaId)
                 : undefined
               
               return (
@@ -202,4 +234,4 @@ export default function Dashboard() {
       
     </div>
   )
-}
+}  
