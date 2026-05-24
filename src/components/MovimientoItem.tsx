@@ -1,7 +1,10 @@
-import { ArrowLeftRight } from 'lucide-react'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowLeftRight, MoreVertical, Pencil, Trash2, Loader2 } from 'lucide-react'
 import type { Movimiento, Cuenta, Categoria } from '../types'
 import { formatearDinero, formatearFechaRelativa } from '../utils/formatters'
 import { obtenerIcono } from '../utils/iconos'
+import { useEliminarMovimiento } from '../hooks/useMovimientos'
 
 interface MovimientoItemProps {
   movimiento: Movimiento
@@ -16,6 +19,10 @@ export default function MovimientoItem({
   cuentaDestino,
   categoria,
 }: MovimientoItemProps) {
+  const navigate = useNavigate()
+  const [menuAbierto, setMenuAbierto] = useState(false)
+  const eliminarMutation = useEliminarMovimiento()
+  
   const esTransferencia = movimiento.tipo === 'transferencia'
   const esIngreso = movimiento.tipo === 'ingreso'
   const esEgreso = movimiento.tipo === 'egreso'
@@ -26,13 +33,12 @@ export default function MovimientoItem({
   
   if (esTransferencia) {
     Icon = ArrowLeftRight
-    colorIcono = '#6B7280' // gris
+    colorIcono = '#6B7280'
   } else {
     Icon = obtenerIcono(categoria?.icono ?? 'more-horizontal')
     colorIcono = categoria?.color ?? '#6B7280'
   }
   
-  // Determinar texto de la línea secundaria
   let textoSecundario: string
   if (esTransferencia) {
     textoSecundario = `${cuenta?.nombre ?? '?'} → ${cuentaDestino?.nombre ?? '?'}`
@@ -40,7 +46,6 @@ export default function MovimientoItem({
     textoSecundario = `${categoria?.nombre ?? 'Sin categoría'} · ${cuenta?.nombre ?? 'Sin cuenta'}`
   }
   
-  // Color y signo del monto
   let colorMonto: string
   let signoMonto: string
   
@@ -55,8 +60,27 @@ export default function MovimientoItem({
     signoMonto = ''
   }
   
+  const handleEditar = () => {
+    setMenuAbierto(false)
+    navigate(`/agregar/${movimiento.id}`)
+  }
+  
+  const handleEliminar = async () => {
+    setMenuAbierto(false)
+    if (!confirm(`¿Eliminar este movimiento? El saldo de la cuenta volverá a su valor anterior.`)) {
+      return
+    }
+    
+    try {
+      await eliminarMutation.mutateAsync(movimiento)
+    } catch (err) {
+      console.error('Error al eliminar movimiento:', err)
+      alert('No se pudo eliminar. Intenta de nuevo.')
+    }
+  }
+  
   return (
-    <div className="bg-white rounded-2xl p-3.5 border border-gray-100 flex items-center gap-3">
+    <div className="bg-white rounded-2xl p-3.5 border border-gray-100 flex items-center gap-3 relative">
       
       {/* Ícono */}
       <div
@@ -84,6 +108,48 @@ export default function MovimientoItem({
       <p className={`font-bold text-sm whitespace-nowrap ${colorMonto}`}>
         {signoMonto}{formatearDinero(movimiento.monto)}
       </p>
+      
+      {/* Botón de menú */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          setMenuAbierto(!menuAbierto)
+        }}
+        className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 active:scale-95 transition-all -mr-1"
+        disabled={eliminarMutation.isPending}
+      >
+        {eliminarMutation.isPending ? (
+          <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+        ) : (
+          <MoreVertical className="w-4 h-4 text-gray-400" />
+        )}
+      </button>
+      
+      {/* Menú dropdown */}
+      {menuAbierto && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setMenuAbierto(false)}
+          />
+          <div className="absolute right-2 top-12 w-44 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-20">
+            <button
+              onClick={handleEditar}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <Pencil className="w-4 h-4" />
+              Editar
+            </button>
+            <button
+              onClick={handleEliminar}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-rose-600 hover:bg-rose-50 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Eliminar
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

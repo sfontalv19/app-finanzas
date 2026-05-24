@@ -50,7 +50,7 @@ export default function Login() {
             <Wallet className="w-8 h-8 text-white" strokeWidth={2.5} />
           </div>
           <h1 className="text-3xl font-bold text-gray-800">
-            Finanzas App
+            Vato  App
           </h1>
           <p className="text-gray-500 mt-2 text-sm">
             Controla tu dinero con estilo 💜

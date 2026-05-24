@@ -4,6 +4,7 @@ import {
   obtenerMovimientos,
   crearMovimiento,
   eliminarMovimiento,
+  actualizarMovimiento,
 } from '../services/movimientosService'
 import type { Movimiento } from '../types'
 import type { MovimientoFormData } from '../lib/schemas'
@@ -53,6 +54,30 @@ export function useEliminarMovimiento() {
   
   return useMutation({
     mutationFn: (movimiento: Movimiento) => eliminarMovimiento(userId!, movimiento),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['movimientos', userId] })
+      queryClient.invalidateQueries({ queryKey: ['cuentas', userId] })
+    },
+  })
+}
+
+/**
+ * Hook para actualizar (editar) un movimiento existente.
+ * Internamente revierte el viejo y aplica el nuevo de forma atómica.
+ */
+export function useActualizarMovimiento() {
+  const { usuario } = useAuth()
+  const queryClient = useQueryClient()
+  const userId = usuario?.uid
+  
+  return useMutation({
+    mutationFn: ({
+      movimientoOriginal,
+      datosNuevos,
+    }: {
+      movimientoOriginal: Movimiento
+      datosNuevos: MovimientoFormData
+    }) => actualizarMovimiento(userId!, movimientoOriginal, datosNuevos),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['movimientos', userId] })
       queryClient.invalidateQueries({ queryKey: ['cuentas', userId] })

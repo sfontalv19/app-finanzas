@@ -24,13 +24,19 @@ export default function Dashboard() {
   // Cálculos solo cuando hay datos
   const cuentasActivas = cuentas?.filter((c) => !c.archivada) ?? []
   
+  // Helper: determinar si una cuenta es de débito (sirve para filtrar movimientos reales)
+  const esDebitoLaCuenta = (cuentaId: string | undefined) => {
+    if (!cuentaId) return false
+    const cuenta = cuentasActivas.find((c) => c.id === cuentaId)
+    return cuenta?.tipo === 'debito'
+  }
+  
+  // Balance total: solo cuentas de débito/efectivo (no contamos tarjetas de crédito)
   const balanceTotal = cuentasActivas.reduce((total, cuenta) => {
     if (cuenta.tipo === 'debito') {
       return total + cuenta.saldoActual
-    } else {
-      const deuda = (cuenta.cupoTotal ?? 0) - (cuenta.cupoDisponible ?? 0)
-      return total - deuda
     }
+    return total
   }, 0)
   
   const ahora = new Date()
@@ -41,12 +47,16 @@ export default function Dashboard() {
     )
   })
   
+  // Ingresos del mes: solo cuando la cuenta receptora es de débito
+  // (un "ingreso" a tarjeta de crédito = pago a tarjeta, no es plata nueva)
   const ingresosMes = movimientosMes
-    .filter((mov) => mov.tipo === 'ingreso')
+    .filter((mov) => mov.tipo === 'ingreso' && esDebitoLaCuenta(mov.cuentaId))
     .reduce((total, mov) => total + mov.monto, 0)
   
+  // Egresos del mes: solo cuando la cuenta origen es de débito
+  // (un "egreso" desde tarjeta de crédito = compra con tarjeta, ya se contará cuando se pague)
   const egresosMes = movimientosMes
-    .filter((mov) => mov.tipo === 'egreso')
+    .filter((mov) => mov.tipo === 'egreso' && esDebitoLaCuenta(mov.cuentaId))
     .reduce((total, mov) => total + mov.monto, 0)
   
   const nombreMes = new Intl.DateTimeFormat('es-CO', {
@@ -62,8 +72,13 @@ export default function Dashboard() {
     .sort((a, b) => b.fecha.getTime() - a.fecha.getTime())
     .slice(0, 5)
   
+  // Gráfico: solo egresos REALES (los que salieron de cuentas de débito/efectivo)
+  const movimientosMesParaGrafico = movimientosMes.filter(
+    (mov) => mov.tipo === 'egreso' && esDebitoLaCuenta(mov.cuentaId)
+  )
+  
   const datosGrafico = categorias 
-    ? agruparGastosPorCategoria(movimientosMes, categorias)
+    ? agruparGastosPorCategoria(movimientosMesParaGrafico, categorias)
     : []
   
   // Estado de carga
@@ -90,7 +105,7 @@ export default function Dashboard() {
         <h1 className="text-2xl font-bold text-gray-800 mt-0.5">
           Tus finanzas
         </h1>
-        <p className="text-gray-400 text-xs mt-0.5 capitalize">
+        <p className="text-gray-400 text-xs mt-0.5 ">
           {nombreMes}
         </p>
       </header>
@@ -128,7 +143,7 @@ export default function Dashboard() {
         <section className="bg-purple-50 border border-purple-100 rounded-2xl p-5 text-center">
           <p className="text-sm font-semibold text-purple-700">¡Empieza creando tu primera cuenta!</p>
           <p className="text-xs text-purple-600/80 mt-1">
-            Agrega Nequi, Bancolombia, tu efectivo, o lo que uses para mover tu plata.
+            Agrega Nequi, Bancolombia, tu efectivo, o lo que uses para mover tu dinero.
           </p>
           <Link
             to="/cuentas"

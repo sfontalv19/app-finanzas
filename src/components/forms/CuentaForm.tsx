@@ -4,6 +4,7 @@ import { Check } from 'lucide-react'
 import { cuentaSchema, type CuentaFormData } from '../../lib/schemas'
 import { COLORES_DISPONIBLES, ICONOS_CUENTAS } from '../../lib/constans'
 import { obtenerIcono } from '../../utils/iconos'
+import InputMonto from '../ui/InputMonto'
 import type { Cuenta } from '../../types'
 
 interface CuentaFormProps {
@@ -27,7 +28,10 @@ export default function CuentaForm({ cuenta, onSubmit, onCancel }: CuentaFormPro
       ? {
           nombre: cuenta.nombre,
           tipo: cuenta.tipo,
-          saldoInicial: cuenta.saldoInicial,
+          // Al editar: para débito mostramos saldoActual, para crédito mostramos deuda actual
+          saldoInicial: cuenta.tipo === 'debito'
+            ? cuenta.saldoActual
+            : (cuenta.cupoTotal ?? 0) - (cuenta.cupoDisponible ?? 0),
           cupoTotal: cuenta.cupoTotal,
           color: cuenta.color,
           icono: cuenta.icono,
@@ -100,43 +104,26 @@ export default function CuentaForm({ cuenta, onSubmit, onCancel }: CuentaFormPro
         />
       </div>
       
-      {/* Saldo inicial */}
-     {!esEdicion ? (
+      {/* Saldo / Deuda */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          {tipoSeleccionado === 'credito' ? 'Deuda actual' : 'Saldo inicial'}
+          {tipoSeleccionado === 'credito' ? 'Deuda actual' : (esEdicion ? 'Saldo actual' : 'Saldo inicial')}
         </label>
-        <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">
-            $
-          </span>
-          <input
-            type="number"
-            step="any"
-            {...register('saldoInicial', { valueAsNumber: true })}
-            placeholder="0"
-            className="w-full pl-8 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-transparent focus:bg-white transition"
-          />
-        </div>
+        <Controller
+          control={control}
+          name="saldoInicial"
+          render={({ field }) => (
+            <InputMonto
+              value={field.value}
+              onChange={(v) => field.onChange(v ?? 0)}
+              placeholder="0"
+            />
+          )}
+        />
         {errors.saldoInicial && (
           <p className="text-xs text-rose-500 mt-1">{errors.saldoInicial.message}</p>
         )}
       </div>
-    ) : (
-      <div className="bg-purple-50/50 border border-purple-100 rounded-xl p-3 flex items-start gap-2.5">
-        <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-          <span className="text-purple-600 text-xs font-bold">i</span>
-        </div>
-        <div>
-          <p className="text-xs font-semibold text-purple-700">
-            ¿Quieres ajustar el saldo?
-          </p>
-          <p className="text-[11px] text-purple-600/80 mt-0.5">
-            El saldo se actualiza registrando movimientos. Si te equivocaste al crear la cuenta, registra un ingreso o egreso de ajuste.
-          </p>
-        </div>
-      </div>
-    )}
       
       {/* Cupo total (solo crédito) */}
       {tipoSeleccionado === 'credito' && (
@@ -144,18 +131,17 @@ export default function CuentaForm({ cuenta, onSubmit, onCancel }: CuentaFormPro
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
             Cupo total de la tarjeta
           </label>
-          <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">
-              $
-            </span>
-            <input
-              type="number"
-              step="any"
-              {...register('cupoTotal', { valueAsNumber: true })}
-              placeholder="0"
-              className="w-full pl-8 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-transparent focus:bg-white transition"
-            />
-          </div>
+          <Controller
+            control={control}
+            name="cupoTotal"
+            render={({ field }) => (
+              <InputMonto
+                value={field.value}
+                onChange={field.onChange}
+                placeholder="0"
+              />
+            )}
+          />
           {errors.cupoTotal && (
             <p className="text-xs text-rose-500 mt-1">{errors.cupoTotal.message}</p>
           )}

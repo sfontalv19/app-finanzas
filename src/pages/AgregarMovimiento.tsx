@@ -1,13 +1,15 @@
-import { useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, TrendingUp, TrendingDown, ArrowLeftRight, ArrowDown, Layers, Loader2 } from 'lucide-react'
 import SelectorCuenta from '../components/forms/SelectorCuenta'
 import SelectorCategoria from '../components/forms/SelectorCategoria'
 import SelectorFecha from '../components/forms/SelectorFecha'
+import InputMonto from '../components/ui/InputMonto'
 import { useCuentas } from '../hooks/useCuentas'
 import { useCategorias } from '../hooks/useCategorias'
-import { useCrearMovimiento } from '../hooks/useMovimientos'
+import { useCrearMovimiento, useActualizarMovimiento, useMovimientos } from '../hooks/useMovimientos'
 import { movimientoSchema, type MovimientoFormData } from '../lib/schemas'
 import type { TipoMovimiento } from '../types'
 import { formatearDinero } from '../utils/formatters'
@@ -15,19 +17,21 @@ import { useCrearCompraCuotas } from '../hooks/useComprasCuotas'
 
 export default function AgregarMovimiento() {
   const navigate = useNavigate()
+  const { id: movimientoId } = useParams<{ id?: string }>()
   
   const { data: cuentas } = useCuentas()
   const { data: categorias } = useCategorias()
-  
-  // 🔍 DEBUG: Ver todas las cuentas
-  console.log('📊 Todas las cuentas:', cuentas)
-  console.log('📊 Longitud:', cuentas?.length)
-  cuentas?.forEach(c => {
-    console.log(`  - ${c.nombre}: archivada=${c.archivada}, tipo=${c.tipo}`)
-  })
+  const { data: movimientos } = useMovimientos()
   
   const crearMovimientoMutation = useCrearMovimiento()
   const crearCompraCuotasMutation = useCrearCompraCuotas()
+  const actualizarMovimientoMutation = useActualizarMovimiento()
+  
+  // Buscar el movimiento que se está editando (si hay ID en la URL)
+  const movimientoEditando = movimientoId
+    ? movimientos?.find((m) => m.id === movimientoId)
+    : undefined
+  const esEdicion = !!movimientoEditando
   
   const {
     register,
@@ -57,15 +61,7 @@ export default function AgregarMovimiento() {
   const numeroCuotas = watch('numeroCuotas')
   const monto = watch('monto')
   
-  console.log('🎯 cuentaIdActual:', cuentaIdActual)
-  console.log('🎯 cuentaDestinoIdActual:', cuentaDestinoIdActual)
-  
   const cuentasActivas = cuentas?.filter((c) => c.archivada !== true) ?? []
-  
-  console.log('✅ Cuentas activas filtradas:', cuentasActivas.length)
-  cuentasActivas.forEach(c => {
-    console.log(`  ✓ ${c.nombre} (tipo: ${c.tipo})`)
-  })
   
   const cuentaSeleccionada = cuentasActivas.find((c) => c.id === cuentaIdActual)
   const cuentaDestinoSeleccionada = cuentasActivas.find((c) => c.id === cuentaDestinoIdActual)
@@ -97,16 +93,39 @@ export default function AgregarMovimiento() {
     }
   }
   
+  // Precargar datos en el form cuando se está editando
+  useEffect(() => {
+    if (movimientoEditando) {
+      setValue('tipo', movimientoEditando.tipo)
+      setValue('monto', movimientoEditando.monto)
+      setValue('cuentaId', movimientoEditando.cuentaId)
+      setValue('cuentaDestinoId', movimientoEditando.cuentaDestinoId)
+      setValue('categoriaId', movimientoEditando.categoriaId)
+      setValue('descripcion', movimientoEditando.descripcion)
+      setValue('fecha', movimientoEditando.fecha)
+      setValue('esCompraCuotas', false)
+      setValue('tieneIntereses', false)
+    }
+  }, [movimientoEditando, setValue])
+  
   const onSubmit = async (datos: MovimientoFormData) => {
     try {
-      if (datos.esCompraCuotas) {
+      if (esEdicion && movimientoEditando) {
+        // MODO EDICIÓN: actualizar
+        await actualizarMovimientoMutation.mutateAsync({
+          movimientoOriginal: movimientoEditando,
+          datosNuevos: datos,
+        })
+      } else if (datos.esCompraCuotas) {
+        // MODO CREACIÓN: compra a cuotas
         await crearCompraCuotasMutation.mutateAsync(datos)
       } else {
+        // MODO CREACIÓN: movimiento normal
         await crearMovimientoMutation.mutateAsync(datos)
       }
       navigate(-1)
     } catch (err) {
-      console.error('Error al crear movimiento:', err)
+      console.error('Error al guardar movimiento:', err)
       alert('Hubo un problema al guardar el movimiento. Intenta de nuevo.')
     }
   }
@@ -129,7 +148,7 @@ export default function AgregarMovimiento() {
           <ArrowLeft className="w-5 h-5 text-gray-700" />
         </button>
         <h1 className="text-lg font-bold text-gray-800">
-          Nuevo movimiento
+          {esEdicion ? 'Editar movimiento' : 'Nuevo movimiento'}
         </h1>
       </header>
       
@@ -185,12 +204,18 @@ export default function AgregarMovimiento() {
         <div className="text-center py-2">
           <div className="flex items-center justify-center gap-1">
             <span className={`text-3xl font-bold ${getColorMonto()} opacity-50`}>$</span>
-            <input
-              type="number"
-              step="any"
-              {...register('monto', { valueAsNumber: true })}
-              placeholder="0"
-              className={`text-5xl font-bold ${getColorMonto()} bg-transparent text-center w-full max-w-[240px] focus:outline-none placeholder:text-gray-300`}
+            <Controller
+              control={control}
+              name="monto"
+              render={({ field }) => (
+                <InputMonto
+                  value={field.value}
+                  onChange={(v) => field.onChange(v ?? 0)}
+                  variant="large"
+                  colorClass={getColorMonto()}
+                  placeholder="0"
+                />
+              )}
             />
           </div>
           <p className="text-xs text-gray-400 mt-1">pesos colombianos</p>
@@ -251,8 +276,8 @@ export default function AgregarMovimiento() {
           />
         )}
         
-        {/* Toggle de compra a cuotas */}
-        {puedeSerCuotas && (
+        {/* Toggle de compra a cuotas (solo al crear, no al editar) */}
+        {puedeSerCuotas && !esEdicion && (
           <Controller
             control={control}
             name="esCompraCuotas"
@@ -358,16 +383,17 @@ export default function AgregarMovimiento() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Valor de cada cuota
                 </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
-                  <input
-                    type="number"
-                    step="any"
-                    {...register('valorCuota', { valueAsNumber: true })}
-                    placeholder="Lo que te dice el banco"
-                    className="w-full pl-8 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-transparent transition"
-                  />
-                </div>
+                <Controller
+                  control={control}
+                  name="valorCuota"
+                  render={({ field }) => (
+                    <InputMonto
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Lo que te dice el banco"
+                    />
+                  )}
+                />
               </div>
             ) : valorCuotaCalculado > 0 && (
               <div className="bg-white rounded-xl p-3 border border-purple-100">
@@ -437,16 +463,16 @@ export default function AgregarMovimiento() {
         {/* Botón de guardar */}
         <button
           type="submit"
-         disabled={crearMovimientoMutation.isPending || crearCompraCuotasMutation.isPending}
+          disabled={crearMovimientoMutation.isPending || crearCompraCuotasMutation.isPending || actualizarMovimientoMutation.isPending}
           className="w-full py-3.5 bg-gradient-to-r from-purple-400 to-pink-400 text-white font-semibold rounded-xl shadow-lg shadow-purple-200 active:scale-[0.98] transition-all mt-6 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          {(crearMovimientoMutation.isPending || crearCompraCuotasMutation.isPending) ? (
+          {(crearMovimientoMutation.isPending || crearCompraCuotasMutation.isPending || actualizarMovimientoMutation.isPending) ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
               Guardando...
             </>
           ) : (
-            'Guardar movimiento'
+            esEdicion ? 'Guardar cambios' : 'Guardar movimiento'
           )}
         </button>
       </form>

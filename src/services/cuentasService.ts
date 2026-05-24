@@ -5,16 +5,16 @@ import {
   getDoc,
   addDoc,
   updateDoc,
+  deleteDoc,
+  query,
+  where,
+  limit,
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import type { Cuenta } from '../types'
 import type { CuentaFormData } from '../lib/schemas'
 
-/**
- * Construye la referencia a la colección de cuentas de un usuario.
- * Path: usuarios/{userId}/cuentas
- */
 function refCuentas(userId: string) {
   return collection(db, 'usuarios', userId, 'cuentas')
 }
@@ -78,7 +78,6 @@ export async function crearCuenta(
   userId: string,
   datos: CuentaFormData
 ): Promise<string> {
-  // Lógica especial según tipo de cuenta
   const datosCuenta: Record<string, unknown> = {
     nombre: datos.nombre,
     tipo: datos.tipo,
@@ -89,16 +88,15 @@ export async function crearCuenta(
   }
   
   if (datos.tipo === 'debito') {
-    // Para débito: saldoInicial = saldoActual
-    datosCuenta.saldoInicial = datos.saldoInicial
-    datosCuenta.saldoActual = datos.saldoInicial
+    const saldo = Math.round(datos.saldoInicial)
+    datosCuenta.saldoInicial = saldo
+    datosCuenta.saldoActual = saldo
   } else {
-    // Para crédito: saldoInicial representa la deuda actual
-    const cupoTotal = datos.cupoTotal ?? 0
-    const deuda = datos.saldoInicial
+    const cupoTotal = Math.round(datos.cupoTotal ?? 0)
+    const deuda = Math.round(datos.saldoInicial)
     
     datosCuenta.saldoInicial = deuda
-    datosCuenta.saldoActual = 0 // no aplica para crédito, se maneja con cupo
+    datosCuenta.saldoActual = 0
     datosCuenta.cupoTotal = cupoTotal
     datosCuenta.cupoDisponible = cupoTotal - deuda
   }
@@ -108,9 +106,8 @@ export async function crearCuenta(
 }
 
 /**
- * Actualiza una cuenta existente.
- * Nota: no toca los saldos actuales, solo edita info "estática".
- * Los saldos se modifican vía movimientos.
+ * Actualiza una cuenta existente (modo "edición libre").
+ * Permite editar nombre, color, ícono, saldo/deuda y cupo total.
  */
 export async function actualizarCuenta(
   userId: string,
@@ -125,40 +122,60 @@ export async function actualizarCuenta(
     icono: datos.icono,
   }
   
-  // Si es crédito, permitir actualizar el cupo total
-  if (datos.tipo === 'credito' && datos.cupoTotal !== undefined) {
-    // Al cambiar el cupo total, hay que recalcular el cupo disponible
-    // manteniendo la deuda actual
-    const cuentaActual = await obtenerCuenta(userId, cuentaId)
-    if (cuentaActual) {
-      const deudaActual = (cuentaActual.cupoTotal ?? 0) - (cuentaActual.cupoDisponible ?? 0)
-      datosActualizar.cupoTotal = datos.cupoTotal
-      datosActualizar.cupoDisponible = datos.cupoTotal - deudaActual
-    }
+  if (datos.tipo === 'debito') {
+    // Para débito: editar libremente el saldo actual
+    const nuevoSaldo = Math.round(datos.saldoInicial)
+    datosActualizar.saldoActual = nuevoSaldo
+  } else {
+    // Para crédito: el "saldoInicial" del formulario representa la deuda actual
+    const nuevoCupoTotal = Math.round(datos.cupoTotal ?? 0)
+    const nuevaDeuda = Math.round(datos.saldoInicial)
+    datosActualizar.cupoTotal = nuevoCupoTotal
+    datosActualizar.cupoDisponible = nuevoCupoTotal - nuevaDeuda
   }
   
   await updateDoc(docRef, datosActualizar)
 }
 
 /**
- * Archiva una cuenta (no la borra, solo la marca como archivada).
- * No usamos delete para no perder el histórico de movimientos.
+ * "Elimina" una cuenta (visualmente).
+ * - Si la cuenta NO tiene movimientos: la borra de verdad de Firestore.
+ * - Si tiene movimientos: la archiva (queda invisible pero preserva el histórico).
+ * 
+ * Esto se llama desde el botón "Eliminar cuenta" en la UI.
  */
-export async function archivarCuenta(
+export async function eliminarCuenta(
   userId: string,
   cuentaId: string
 ): Promise<void> {
+  // 1. Verificar si tiene movimientos asociados (como cuenta origen o destino)
+  const movimientosRef = collection(db, 'usuarios', userId, 'movimientos')
+  
+  const queryOrigen = query(
+    movimientosRef,
+    where('cuentaId', '==', cuentaId),
+    limit(1)
+  )
+  const queryDestino = query(
+    movimientosRef,
+    where('cuentaDestinoId', '==', cuentaId),
+    limit(1)
+  )
+  
+  const [snapOrigen, snapDestino] = await Promise.all([
+    getDocs(queryOrigen),
+    getDocs(queryDestino),
+  ])
+  
+  const tieneMovimientos = !snapOrigen.empty || !snapDestino.empty
+  
   const docRef = doc(db, 'usuarios', userId, 'cuentas', cuentaId)
-  await updateDoc(docRef, { archivada: true })
-}
-
-/**
- * Desarchiva una cuenta (la vuelve a activar).
- */
-export async function desarchivarCuenta(
-  userId: string,
-  cuentaId: string
-): Promise<void> {
-  const docRef = doc(db, 'usuarios', userId, 'cuentas', cuentaId)
-  await updateDoc(docRef, { archivada: false })
+  
+  if (tieneMovimientos) {
+    // Tiene historial: solo marcamos como archivada (no se borra de verdad)
+    await updateDoc(docRef, { archivada: true })
+  } else {
+    // No tiene historial: la podemos borrar de verdad
+    await deleteDoc(docRef)
+  }
 }

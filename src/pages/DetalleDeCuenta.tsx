@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, MoreVertical, Pencil, Archive, TrendingUp, TrendingDown, Loader2 } from 'lucide-react'
+import { ArrowLeft, MoreVertical, Pencil, Trash2, TrendingUp, TrendingDown, Loader2 } from 'lucide-react'
 import MovimientoItem from '../components/MovimientoItem'
 import CuotaItem from '../components/CuotaItem'
 import Modal from '../components/ui/Modal'
 import CuentaForm from '../components/forms/CuentaForm'
-import { useCuenta, useCuentas, useActualizarCuenta, useArchivarCuenta } from '../hooks/useCuentas'
+import { useCuenta, useCuentas, useActualizarCuenta, useEliminarCuenta } from '../hooks/useCuentas'
 import { useCategorias } from '../hooks/useCategorias'
 import { useMovimientos } from '../hooks/useMovimientos'
 import { useComprasCuotas } from '../hooks/useComprasCuotas'
@@ -26,7 +26,7 @@ export default function DetalleCuenta() {
   const { data: cuentas } = useCuentas()
   const { data: movimientos } = useMovimientos()
   const actualizarMutation = useActualizarCuenta()
-  const archivarMutation = useArchivarCuenta()
+  const eliminarMutation = useEliminarCuenta()
   const { data: comprasCuotas } = useComprasCuotas()
 
   // Estado de carga
@@ -109,18 +109,18 @@ export default function DetalleCuenta() {
     }
   }
   
-  const handleArchivar = async () => {
-    if (!confirm('¿Estás segura de archivar esta cuenta? Podrás ver el histórico pero no aparecerá en la lista activa.')) {
+  const handleEliminar = async () => {
+    if (!confirm('¿Estás segura de eliminar esta cuenta? Esta acción no se puede deshacer.')) {
       setMenuAbierto(false)
       return
     }
     
     try {
-      await archivarMutation.mutateAsync(cuenta.id)
+      await eliminarMutation.mutateAsync(cuenta.id)
       navigate('/cuentas')
     } catch (err) {
-      console.error('Error al archivar cuenta:', err)
-      alert('No se pudo archivar la cuenta. Intenta de nuevo.')
+      console.error('Error al eliminar cuenta:', err)
+      alert('No se pudo eliminar la cuenta. Intenta de nuevo.')
     }
     setMenuAbierto(false)
   }
@@ -166,16 +166,16 @@ export default function DetalleCuenta() {
                     Editar cuenta
                   </button>
                   <button
-                    onClick={handleArchivar}
-                    disabled={archivarMutation.isPending}
+                    onClick={handleEliminar}
+                    disabled={eliminarMutation.isPending}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
                   >
-                    {archivarMutation.isPending ? (
+                    {eliminarMutation.isPending ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      <Archive className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" />
                     )}
-                    Archivar cuenta
+                    Eliminar cuenta
                   </button>
                 </div>
               </>

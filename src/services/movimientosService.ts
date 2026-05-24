@@ -62,18 +62,18 @@ function calcularAjusteCuenta(
   monto: number,
   esIngresoEnCuenta: boolean
 ): { saldoActual?: number; cupoDisponible?: number } {
+  const montoEntero = Math.round(monto)
+  
   // Si es débito: ajusta saldoActual
   if (cuentaActual.tipo === 'debito') {
-    const delta = esIngresoEnCuenta ? monto : -monto
-    return { saldoActual: cuentaActual.saldoActual + delta }
+    const delta = esIngresoEnCuenta ? montoEntero : -montoEntero
+    return { saldoActual: Math.round(cuentaActual.saldoActual + delta) }
   }
   
   // Si es crédito: ajusta cupoDisponible
-  // Un "egreso" en crédito = compraste, aumenta deuda, baja cupoDisponible
-  // Un "ingreso" en crédito = pagaste la tarjeta, baja deuda, sube cupoDisponible
   const cupoDisponibleActual = cuentaActual.cupoDisponible ?? 0
-  const delta = esIngresoEnCuenta ? monto : -monto
-  return { cupoDisponible: cupoDisponibleActual + delta }
+  const delta = esIngresoEnCuenta ? montoEntero : -montoEntero
+  return { cupoDisponible: Math.round(cupoDisponibleActual + delta) }
 }
 
 /**
@@ -90,7 +90,7 @@ export async function crearMovimiento(
   
   batch.set(movimientoRef, {
     tipo: datos.tipo,
-    monto: datos.monto,
+    monto: Math.round(datos.monto),
     cuentaId: datos.cuentaId,
     cuentaDestinoId: datos.cuentaDestinoId ?? null,
     categoriaId: datos.categoriaId ?? null,
@@ -201,6 +201,133 @@ export async function eliminarMovimiento(
       batch.update(refCuenta(userId, movimiento.cuentaDestinoId), ajusteDestino)
     }
   }
+  
+  await batch.commit()
+}
+
+/**
+ * Actualiza un movimiento existente.
+ * Lógica: revertir el efecto del movimiento viejo, luego aplicar el nuevo.
+ * Todo atómico.
+ */
+export async function actualizarMovimiento(
+  userId: string,
+  movimientoOriginal: Movimiento,
+  datosNuevos: MovimientoFormData
+): Promise<void> {
+  const batch = writeBatch(db)
+  
+  // Traer todas las cuentas una sola vez
+  const cuentasSnapshot = await getDocs(collection(db, 'usuarios', userId, 'cuentas'))
+  
+  // Helper para encontrar y leer una cuenta
+  const leerCuenta = (cuentaId: string) => {
+    const docCuenta = cuentasSnapshot.docs.find((d) => d.id === cuentaId)
+    if (!docCuenta) return null
+    return {
+      ref: refCuenta(userId, cuentaId),
+      data: docCuenta.data() as {
+        tipo: 'debito' | 'credito'
+        saldoActual: number
+        cupoDisponible?: number
+      },
+    }
+  }
+  
+  // Acumulamos los ajustes por cuenta para poder combinarlos
+  // (ej. si la nueva cuenta es la misma que la vieja, sumamos los deltas)
+  const ajustesPorCuenta = new Map<string, { delta: number; tipo: 'debito' | 'credito' }>()
+  
+  const agregarAjuste = (
+    cuentaId: string,
+    monto: number,
+    esIngreso: boolean,
+    tipoCuenta: 'debito' | 'credito'
+  ) => {
+    const montoRedondeado = Math.round(monto)
+    const delta = esIngreso ? montoRedondeado : -montoRedondeado
+    const actual = ajustesPorCuenta.get(cuentaId)
+    ajustesPorCuenta.set(cuentaId, {
+      delta: (actual?.delta ?? 0) + delta,
+      tipo: tipoCuenta,
+    })
+  }
+  
+  // 1. REVERTIR el movimiento original
+  const cuentaOrigenVieja = leerCuenta(movimientoOriginal.cuentaId)
+  if (cuentaOrigenVieja) {
+    // Reversa: si fue ingreso → restar (esIngreso=false), si fue egreso → sumar (esIngreso=true)
+    const esReversaIngreso = movimientoOriginal.tipo === 'egreso'
+    agregarAjuste(
+      movimientoOriginal.cuentaId,
+      movimientoOriginal.monto,
+      esReversaIngreso,
+      cuentaOrigenVieja.data.tipo
+    )
+  }
+  
+  if (movimientoOriginal.tipo === 'transferencia' && movimientoOriginal.cuentaDestinoId) {
+    const cuentaDestinoVieja = leerCuenta(movimientoOriginal.cuentaDestinoId)
+    if (cuentaDestinoVieja) {
+      // El destino de la transferencia vieja debe restarse
+      agregarAjuste(
+        movimientoOriginal.cuentaDestinoId,
+        movimientoOriginal.monto,
+        false,
+        cuentaDestinoVieja.data.tipo
+      )
+    }
+  }
+  
+  // 2. APLICAR el movimiento nuevo
+  const cuentaOrigenNueva = leerCuenta(datosNuevos.cuentaId)
+  if (!cuentaOrigenNueva) {
+    throw new Error('Cuenta origen nueva no encontrada')
+  }
+  
+  if (datosNuevos.tipo === 'ingreso') {
+    agregarAjuste(datosNuevos.cuentaId, datosNuevos.monto, true, cuentaOrigenNueva.data.tipo)
+  } else if (datosNuevos.tipo === 'egreso') {
+    agregarAjuste(datosNuevos.cuentaId, datosNuevos.monto, false, cuentaOrigenNueva.data.tipo)
+  } else if (datosNuevos.tipo === 'transferencia') {
+    if (!datosNuevos.cuentaDestinoId) {
+      throw new Error('Cuenta destino requerida para transferencia')
+    }
+    const cuentaDestinoNueva = leerCuenta(datosNuevos.cuentaDestinoId)
+    if (!cuentaDestinoNueva) {
+      throw new Error('Cuenta destino nueva no encontrada')
+    }
+    agregarAjuste(datosNuevos.cuentaId, datosNuevos.monto, false, cuentaOrigenNueva.data.tipo)
+    agregarAjuste(datosNuevos.cuentaDestinoId, datosNuevos.monto, true, cuentaDestinoNueva.data.tipo)
+  }
+  
+  // 3. Aplicar todos los ajustes acumulados al batch
+  for (const [cuentaId, ajuste] of ajustesPorCuenta) {
+    const cuenta = leerCuenta(cuentaId)
+    if (!cuenta) continue
+    
+    if (ajuste.tipo === 'debito') {
+      batch.update(cuenta.ref, {
+        saldoActual: Math.round(cuenta.data.saldoActual + ajuste.delta),
+      })
+    } else {
+      batch.update(cuenta.ref, {
+        cupoDisponible: Math.round((cuenta.data.cupoDisponible ?? 0) + ajuste.delta),
+      })
+    }
+  }
+  
+  // 4. Actualizar el documento del movimiento
+  const movimientoRef = doc(db, 'usuarios', userId, 'movimientos', movimientoOriginal.id)
+  batch.update(movimientoRef, {
+    tipo: datosNuevos.tipo,
+    monto: Math.round(datosNuevos.monto),
+    cuentaId: datosNuevos.cuentaId,
+    cuentaDestinoId: datosNuevos.cuentaDestinoId ?? null,
+    categoriaId: datosNuevos.categoriaId ?? null,
+    descripcion: datosNuevos.descripcion,
+    fecha: Timestamp.fromDate(datosNuevos.fecha),
+  })
   
   await batch.commit()
 }

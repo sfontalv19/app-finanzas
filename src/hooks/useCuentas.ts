@@ -5,7 +5,7 @@ import {
   obtenerCuenta,
   crearCuenta,
   actualizarCuenta,
-  archivarCuenta,
+  eliminarCuenta,
 } from '../services/cuentasService'
 import type { CuentaFormData } from '../lib/schemas'
 
@@ -71,15 +71,16 @@ export function useActualizarCuenta() {
 }
 
 /**
- * Hook para archivar una cuenta.
+ * Hook para eliminar una cuenta.
+ * Si tiene movimientos: la archiva. Si no, la borra.
  */
-export function useArchivarCuenta() {
+export function useEliminarCuenta() {
   const { usuario } = useAuth()
   const queryClient = useQueryClient()
   const userId = usuario?.uid
   
   return useMutation({
-    mutationFn: (cuentaId: string) => archivarCuenta(userId!, cuentaId),
+    mutationFn: (cuentaId: string) => eliminarCuenta(userId!, cuentaId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cuentas', userId] })
     },

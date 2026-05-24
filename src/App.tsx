@@ -32,6 +32,7 @@ function App() {
           <Route path="/cuentas" element={<Cuentas />} />
           <Route path="/cuentas/:id" element={<DetalleCuenta />} />
           <Route path="/agregar" element={<AgregarMovimiento />} />
+          <Route path="/agregar/:id" element={<AgregarMovimiento />} />
           <Route path="/movimientos" element={<Movimientos />} />
           <Route path="/mas" element={<Mas/>} />
           <Route path="/categorias" element={<Categorias />} />
