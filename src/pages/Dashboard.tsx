@@ -12,6 +12,7 @@ import { useComprasCuotas } from '../hooks/useComprasCuotas'
 import { calcularCuotasDelMes } from '../utils/cuotas'
 import { agruparGastosPorCategoria } from '../utils/graficos'
 import { formatearDinero } from '../utils/formatters'
+import type { Movimiento } from '../types'
 
 export default function Dashboard() {
   const { data: cuentas, isLoading: cargandoCuentas } = useCuentas()
@@ -29,6 +30,23 @@ export default function Dashboard() {
     if (!cuentaId) return false
     const cuenta = cuentasActivas.find((c) => c.id === cuentaId)
     return cuenta?.tipo === 'debito'
+  }
+  
+  // Helper: determinar si una cuenta es de crédito
+  const esCreditoLaCuenta = (cuentaId: string | undefined) => {
+    if (!cuentaId) return false
+    const cuenta = cuentasActivas.find((c) => c.id === cuentaId)
+    return cuenta?.tipo === 'credito'
+  }
+  
+  // Helper: determinar si un movimiento es "pago a tarjeta"
+  // (transferencia desde débito hacia crédito = está pagando tarjeta = es egreso real)
+  const esPagoATarjeta = (mov: Movimiento) => {
+    return (
+      mov.tipo === 'transferencia' &&
+      esDebitoLaCuenta(mov.cuentaId) &&
+      esCreditoLaCuenta(mov.cuentaDestinoId)
+    )
   }
   
   // Balance total: solo cuentas de débito/efectivo (no contamos tarjetas de crédito)
@@ -53,10 +71,14 @@ export default function Dashboard() {
     .filter((mov) => mov.tipo === 'ingreso' && esDebitoLaCuenta(mov.cuentaId))
     .reduce((total, mov) => total + mov.monto, 0)
   
-  // Egresos del mes: solo cuando la cuenta origen es de débito
-  // (un "egreso" desde tarjeta de crédito = compra con tarjeta, ya se contará cuando se pague)
+  // Egresos del mes:
+  // - Egresos directos desde cuentas de débito (compras pagadas con débito/efectivo)
+  // - Transferencias de débito a crédito (= pagos a tarjeta = plata saliendo)
   const egresosMes = movimientosMes
-    .filter((mov) => mov.tipo === 'egreso' && esDebitoLaCuenta(mov.cuentaId))
+    .filter((mov) => {
+      const esEgresoDirecto = mov.tipo === 'egreso' && esDebitoLaCuenta(mov.cuentaId)
+      return esEgresoDirecto || esPagoATarjeta(mov)
+    })
     .reduce((total, mov) => total + mov.monto, 0)
   
   const nombreMes = new Intl.DateTimeFormat('es-CO', {
@@ -72,14 +94,21 @@ export default function Dashboard() {
     .sort((a, b) => b.fecha.getTime() - a.fecha.getTime())
     .slice(0, 5)
   
-  // Gráfico: solo egresos REALES (los que salieron de cuentas de débito/efectivo)
+  // Gráfico: gastos categorizados del mes (devengado).
+  // Incluye TODOS los egresos con categoría: tanto los pagados con débito 
+  // como los hechos con tarjeta de crédito. Esto refleja "cuánto gasté".
+  // Los pagos a tarjeta (transferencias débito→crédito) no se incluyen 
+  // porque no son gastos nuevos, ya están reflejados en las compras originales.
   const movimientosMesParaGrafico = movimientosMes.filter(
-    (mov) => mov.tipo === 'egreso' && esDebitoLaCuenta(mov.cuentaId)
+    (mov) => mov.tipo === 'egreso'
   )
   
   const datosGrafico = categorias 
     ? agruparGastosPorCategoria(movimientosMesParaGrafico, categorias)
     : []
+  
+  // Total del gráfico = suma de las categorías (no usar egresosMes que tiene otra lógica)
+  const totalGraficoGastos = datosGrafico.reduce((sum, d) => sum + d.total, 0)
   
   // Estado de carga
   if (cargando) {
@@ -166,7 +195,7 @@ export default function Dashboard() {
             </span>
           </div>
           
-          <GraficoGastos datos={datosGrafico} totalGastos={egresosMes} />
+          <GraficoGastos datos={datosGrafico} totalGastos={totalGraficoGastos} />
         </section>
       )}
       

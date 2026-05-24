@@ -24,19 +24,8 @@ export default function SelectorCuenta({
 }: SelectorCuentaProps) {
   const [abierto, setAbierto] = useState(false)
   
-  // 🔍 DEBUG: Ver qué recibe el selector
- 
-  cuentas.forEach(c => {
-    console.log(`  - ${c.nombre} (archivada: ${c.archivada})`)
-  })
-  
   // Filtrar cuenta a excluir (útil para transferencias)
   const cuentasDisponibles = cuentas.filter((c) => c.id !== excluirId)
-  
-  console.log(`🔍 "${label}" Después de filtrar excluirId:`, cuentasDisponibles.length, 'cuentas')
-  cuentasDisponibles.forEach(c => {
-    console.log(`  ✓ ${c.nombre}`)
-  })
   
   const handleSelect = (cuentaId: string) => {
     onSelect(cuentaId)

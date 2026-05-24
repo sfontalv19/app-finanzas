@@ -69,16 +69,43 @@ export default function Movimientos() {
     })
   }, [movimientosFiltrados])
   
-  // Stats del periodo filtrado
+  // Helpers para clasificar movimientos según tipo de cuenta
+  const esDebitoLaCuenta = (cuentaId: string | undefined) => {
+    if (!cuentaId) return false
+    const cuenta = cuentas?.find((c) => c.id === cuentaId)
+    return cuenta?.tipo === 'debito'
+  }
+  
+  const esCreditoLaCuenta = (cuentaId: string | undefined) => {
+    if (!cuentaId) return false
+    const cuenta = cuentas?.find((c) => c.id === cuentaId)
+    return cuenta?.tipo === 'credito'
+  }
+  
+  // Stats del periodo filtrado (misma lógica que el Dashboard)
   const stats = useMemo(() => {
+    // Ingresos: solo cuando la cuenta receptora es de débito
+    // (un "ingreso" a tarjeta de crédito = pago a tarjeta, no es plata nueva)
     const ingresos = movimientosFiltrados
-      .filter((m) => m.tipo === 'ingreso')
+      .filter((m) => m.tipo === 'ingreso' && esDebitoLaCuenta(m.cuentaId))
       .reduce((sum, m) => sum + m.monto, 0)
+    
+    // Egresos:
+    // - Egresos directos desde cuentas de débito
+    // - Transferencias débito → crédito (pagos a tarjeta)
     const egresos = movimientosFiltrados
-      .filter((m) => m.tipo === 'egreso')
+      .filter((m) => {
+        const esEgresoDirecto = m.tipo === 'egreso' && esDebitoLaCuenta(m.cuentaId)
+        const esPagoATarjeta =
+          m.tipo === 'transferencia' &&
+          esDebitoLaCuenta(m.cuentaId) &&
+          esCreditoLaCuenta(m.cuentaDestinoId)
+        return esEgresoDirecto || esPagoATarjeta
+      })
       .reduce((sum, m) => sum + m.monto, 0)
+    
     return { ingresos, egresos, balance: ingresos - egresos }
-  }, [movimientosFiltrados])
+  }, [movimientosFiltrados, cuentas])
   
   const hayFiltrosActivos = filtroTipo !== 'todos' || filtroCuentaId !== null || filtroCategoriaId !== null
   
