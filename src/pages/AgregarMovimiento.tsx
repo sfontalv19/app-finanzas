@@ -130,7 +130,9 @@ export default function AgregarMovimiento() {
       navigate(-1)
     } catch (err) {
       console.error('Error al guardar movimiento:', err)
-      alert('Hubo un problema al guardar el movimiento. Intenta de nuevo.')
+      // Mostrar el mensaje real del error (ej: saldo insuficiente)
+      const mensaje = err instanceof Error ? err.message : 'Hubo un problema al guardar el movimiento.'
+      alert(mensaje)
     }
   }
   

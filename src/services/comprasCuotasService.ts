@@ -115,6 +115,14 @@ export async function crearCompraCuotas(
   
   const tarjeta = tarjetaDoc.data() as { cupoDisponible?: number }
   const cupoActual = tarjeta.cupoDisponible ?? 0
+  
+  // VALIDAR: el cupo disponible debe alcanzar el monto total
+  if (cupoActual < datos.monto) {
+    throw new Error(
+      `Cupo insuficiente. Tu tarjeta tiene $${cupoActual.toLocaleString('es-CO')} de cupo disponible y estás intentando comprar $${datos.monto.toLocaleString('es-CO')}.`
+    )
+  }
+  
   const tarjetaRef = doc(db, 'usuarios', userId, 'cuentas', datos.cuentaId)
   batch.update(tarjetaRef, {
     cupoDisponible: cupoActual - datos.monto,
@@ -175,10 +183,22 @@ export async function pagarCuota(
     }
     const cuentaPagoRef = doc(db, 'usuarios', userId, 'cuentas', cuentaPagoId)
     if (cuentaPago.tipo === 'debito') {
+      // VALIDAR: saldo suficiente en cuenta de débito
+      if (cuentaPago.saldoActual < compraCuotas.valorCuota) {
+        throw new Error(
+          `Saldo insuficiente. La cuenta tiene $${cuentaPago.saldoActual.toLocaleString('es-CO')} y la cuota es de $${compraCuotas.valorCuota.toLocaleString('es-CO')}.`
+        )
+      }
       batch.update(cuentaPagoRef, {
         saldoActual: cuentaPago.saldoActual - compraCuotas.valorCuota,
       })
     } else {
+      // VALIDAR: cupo suficiente en tarjeta
+      if ((cuentaPago.cupoDisponible ?? 0) < compraCuotas.valorCuota) {
+        throw new Error(
+          `Cupo insuficiente en la tarjeta de pago.`
+        )
+      }
       batch.update(cuentaPagoRef, {
         cupoDisponible: (cuentaPago.cupoDisponible ?? 0) - compraCuotas.valorCuota,
       })
