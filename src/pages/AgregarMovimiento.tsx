@@ -39,6 +39,7 @@ export default function AgregarMovimiento() {
     watch,
     control,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<MovimientoFormData>({
     resolver: zodResolver(movimientoSchema),
@@ -96,17 +97,20 @@ export default function AgregarMovimiento() {
   // Precargar datos en el form cuando se está editando
   useEffect(() => {
     if (movimientoEditando) {
-      setValue('tipo', movimientoEditando.tipo)
-      setValue('monto', movimientoEditando.monto)
-      setValue('cuentaId', movimientoEditando.cuentaId)
-      setValue('cuentaDestinoId', movimientoEditando.cuentaDestinoId)
-      setValue('categoriaId', movimientoEditando.categoriaId)
-      setValue('descripcion', movimientoEditando.descripcion)
-      setValue('fecha', movimientoEditando.fecha)
-      setValue('esCompraCuotas', false)
-      setValue('tieneIntereses', false)
+      reset({
+        tipo: movimientoEditando.tipo,
+        monto: movimientoEditando.monto,
+        cuentaId: movimientoEditando.cuentaId,
+        // Convertir null → undefined para que Zod no falle
+        cuentaDestinoId: movimientoEditando.cuentaDestinoId ?? undefined,
+        categoriaId: movimientoEditando.categoriaId ?? undefined,
+        descripcion: movimientoEditando.descripcion,
+        fecha: movimientoEditando.fecha,
+        esCompraCuotas: false,
+        tieneIntereses: false,
+      })
     }
-  }, [movimientoEditando, setValue])
+  }, [movimientoEditando, reset])
   
   const onSubmit = async (datos: MovimientoFormData) => {
     try {

@@ -40,7 +40,11 @@ export interface Movimiento {
   descripcion: string
   fecha: Date
   creadoEn: Date
-  compraCuotasId?: string     // si es una cuota de una compra
+  compraCuotasId?: string   // si es una cuota de una compra
+  esCompraCuotas?: boolean  // 👈 Agregar
+  numeroCuotas?: number      // 👈 Agregar
+  valorCuota?: number        // 👈 Agregar
+  tieneIntereses?: boolean       
 }
 
 // Tipos para compras a cuotas

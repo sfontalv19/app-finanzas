@@ -25,8 +25,7 @@ export default function SelectorCuenta({
   const [abierto, setAbierto] = useState(false)
   
   // 🔍 DEBUG: Ver qué recibe el selector
-  console.log(`🔍 SelectorCuenta "${label}" recibe:`, cuentas.length, 'cuentas')
-  console.log(`🔍 "${label}" ExcluirId:`, excluirId)
+ 
   cuentas.forEach(c => {
     console.log(`  - ${c.nombre} (archivada: ${c.archivada})`)
   })
