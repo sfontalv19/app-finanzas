@@ -63,7 +63,8 @@ export default function ComprasCuotas() {
       setCompraSeleccionada(null)
     } catch (err) {
       console.error('Error al pagar cuota:', err)
-      alert('No se pudo registrar el pago. Intenta de nuevo.')
+      const mensaje = err instanceof Error ? err.message : 'No se pudo registrar el pago.'
+      alert(mensaje)
     }
   }
   

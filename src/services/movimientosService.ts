@@ -122,10 +122,33 @@ export async function crearMovimiento(
     const ajuste = calcularAjusteCuenta(cuentaOrigen, datos.monto, true)
     batch.update(refCuenta(userId, datos.cuentaId), ajuste)
   } else if (datos.tipo === 'egreso') {
+    // VALIDAR SALDO SUFICIENTE para cuentas de débito
+    if (cuentaOrigen.tipo === 'debito' && cuentaOrigen.saldoActual < datos.monto) {
+      throw new Error(
+        `Saldo insuficiente. Tu cuenta tiene $${cuentaOrigen.saldoActual.toLocaleString('es-CO')} y estás intentando gastar $${datos.monto.toLocaleString('es-CO')}.`
+      )
+    }
+    // VALIDAR CUPO DISPONIBLE para tarjetas de crédito
+    if (cuentaOrigen.tipo === 'credito' && (cuentaOrigen.cupoDisponible ?? 0) < datos.monto) {
+      throw new Error(
+        `Cupo insuficiente. Tu tarjeta tiene $${(cuentaOrigen.cupoDisponible ?? 0).toLocaleString('es-CO')} de cupo disponible y estás intentando gastar $${datos.monto.toLocaleString('es-CO')}.`
+      )
+    }
     // Restar de la cuenta
     const ajuste = calcularAjusteCuenta(cuentaOrigen, datos.monto, false)
     batch.update(refCuenta(userId, datos.cuentaId), ajuste)
   } else if (datos.tipo === 'transferencia') {
+    // VALIDAR SALDO SUFICIENTE en cuenta origen
+    if (cuentaOrigen.tipo === 'debito' && cuentaOrigen.saldoActual < datos.monto) {
+      throw new Error(
+        `Saldo insuficiente. La cuenta origen tiene $${cuentaOrigen.saldoActual.toLocaleString('es-CO')} y estás transfiriendo $${datos.monto.toLocaleString('es-CO')}.`
+      )
+    }
+    if (cuentaOrigen.tipo === 'credito' && (cuentaOrigen.cupoDisponible ?? 0) < datos.monto) {
+      throw new Error(
+        `Cupo insuficiente en la tarjeta origen.`
+      )
+    }
     // Restar de origen
     const ajusteOrigen = calcularAjusteCuenta(cuentaOrigen, datos.monto, false)
     batch.update(refCuenta(userId, datos.cuentaId), ajusteOrigen)
@@ -302,18 +325,29 @@ export async function actualizarMovimiento(
   }
   
   // 3. Aplicar todos los ajustes acumulados al batch
+  // Pero antes validamos que los saldos finales no queden negativos
   for (const [cuentaId, ajuste] of ajustesPorCuenta) {
     const cuenta = leerCuenta(cuentaId)
     if (!cuenta) continue
     
     if (ajuste.tipo === 'debito') {
-      batch.update(cuenta.ref, {
-        saldoActual: Math.round(cuenta.data.saldoActual + ajuste.delta),
-      })
+      const saldoFinal = Math.round(cuenta.data.saldoActual + ajuste.delta)
+      // VALIDAR: el saldo final no puede ser negativo
+      if (saldoFinal < 0) {
+        throw new Error(
+          `Saldo insuficiente. Con este cambio la cuenta quedaría en $${saldoFinal.toLocaleString('es-CO')}.`
+        )
+      }
+      batch.update(cuenta.ref, { saldoActual: saldoFinal })
     } else {
-      batch.update(cuenta.ref, {
-        cupoDisponible: Math.round((cuenta.data.cupoDisponible ?? 0) + ajuste.delta),
-      })
+      const cupoFinal = Math.round((cuenta.data.cupoDisponible ?? 0) + ajuste.delta)
+      // VALIDAR: el cupo final no puede ser negativo
+      if (cupoFinal < 0) {
+        throw new Error(
+          `Cupo insuficiente. Con este cambio la tarjeta quedaría con cupo $${cupoFinal.toLocaleString('es-CO')}.`
+        )
+      }
+      batch.update(cuenta.ref, { cupoDisponible: cupoFinal })
     }
   }
   
