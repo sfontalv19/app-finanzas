@@ -5,6 +5,8 @@ import {
   writeBatch,
   serverTimestamp,
   Timestamp,
+  query,
+  where,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import type { CompraCuotas } from '../types'
@@ -213,6 +215,154 @@ export async function pagarCuota(
     batch.update(tarjetaRef, {
       cupoDisponible: (tarjeta.cupoDisponible ?? 0) + compraCuotas.valorCuota,
     })
+  }
+  
+  await batch.commit()
+}
+/**
+ * Actualiza una compra a cuotas existente.
+ * Lógica: revertir el efecto viejo en el cupo, aplicar el nuevo, 
+ * actualizar el movimiento vinculado.
+ * Todo atómico.
+ */
+export async function actualizarCompraCuotas(
+  userId: string,
+  compraOriginal: CompraCuotas,
+  datosNuevos: {
+    montoTotal: number
+    numeroCuotas: number
+    valorCuota?: number
+    tieneIntereses: boolean
+    categoriaId: string
+    descripcion: string
+  }
+): Promise<void> {
+  const batch = writeBatch(db)
+  
+  // Calcular nuevo valor cuota
+  const nuevoValorCuota = Math.round(
+    datosNuevos.tieneIntereses
+      ? (datosNuevos.valorCuota ?? 0)
+      : datosNuevos.montoTotal / datosNuevos.numeroCuotas
+  )
+  
+  const nuevoMontoTotal = Math.round(datosNuevos.montoTotal)
+  
+  // 1. Calcular la diferencia en el cupo de la tarjeta
+  // La compra vieja ocupaba X cupo, la nueva ocupa Y cupo
+  // pero hay que considerar las cuotas que ya se pagaron
+  const cuotasYaPagadas = compraOriginal.cuotasPagadas
+  const valorViejoQueAfectaCupo = compraOriginal.valorCuota * (compraOriginal.numeroCuotas - cuotasYaPagadas)
+  const valorNuevoQueAfectaCupo = nuevoValorCuota * (datosNuevos.numeroCuotas - cuotasYaPagadas)
+  const diferenciaCupo = valorViejoQueAfectaCupo - valorNuevoQueAfectaCupo
+  
+  // 2. Aplicar la diferencia al cupo de la tarjeta
+  const cuentasSnapshot = await getDocs(collection(db, 'usuarios', userId, 'cuentas'))
+  const tarjetaDoc = cuentasSnapshot.docs.find((d) => d.id === compraOriginal.cuentaId)
+  
+  if (!tarjetaDoc) {
+    throw new Error('Tarjeta no encontrada')
+  }
+  
+  const tarjeta = tarjetaDoc.data() as { cupoDisponible?: number }
+  const cupoActual = tarjeta.cupoDisponible ?? 0
+  const nuevoCupo = Math.round(cupoActual + diferenciaCupo)
+  
+  // Validar que el cupo no quede negativo
+  if (nuevoCupo < 0) {
+    throw new Error(
+      `Cupo insuficiente. Con este cambio la tarjeta quedaría con cupo $${nuevoCupo.toLocaleString('es-CO')}.`
+    )
+  }
+  
+  const tarjetaRef = doc(db, 'usuarios', userId, 'cuentas', compraOriginal.cuentaId)
+  batch.update(tarjetaRef, { cupoDisponible: nuevoCupo })
+  
+  // 3. Actualizar el documento de la compra a cuotas
+  const compraRef = doc(db, 'usuarios', userId, 'comprasCuotas', compraOriginal.id)
+  batch.update(compraRef, {
+    montoTotal: nuevoMontoTotal,
+    numeroCuotas: datosNuevos.numeroCuotas,
+    valorCuota: nuevoValorCuota,
+    tieneIntereses: datosNuevos.tieneIntereses,
+    categoriaId: datosNuevos.categoriaId,
+    descripcion: datosNuevos.descripcion,
+    cuotasRestantes: datosNuevos.numeroCuotas - cuotasYaPagadas,
+  })
+  
+  // 4. Buscar y actualizar el movimiento vinculado original (si existe)
+  const movimientosQuery = query(
+    collection(db, 'usuarios', userId, 'movimientos'),
+    where('compraCuotasId', '==', compraOriginal.id)
+  )
+  const movimientosSnapshot = await getDocs(movimientosQuery)
+  
+  // Actualizar el movimiento original de la compra (no las cuotas ya pagadas)
+  // El movimiento "original" es el que tiene la misma descripción y no es una cuota
+  const movimientoOriginal = movimientosSnapshot.docs.find((d) => {
+    const data = d.data()
+    return !data.descripcion.startsWith('Cuota ')
+  })
+  
+  if (movimientoOriginal) {
+    batch.update(movimientoOriginal.ref, {
+      monto: nuevoMontoTotal,
+      categoriaId: datosNuevos.categoriaId,
+      descripcion: datosNuevos.descripcion,
+    })
+  }
+  
+  await batch.commit()
+}
+
+/**
+ * Elimina una compra a cuotas y revierte su efecto en los saldos.
+ * - Devuelve al cupo de la tarjeta el monto que aún no se ha pagado
+ * - Elimina el movimiento original vinculado
+ * - NO toca los movimientos de las cuotas ya pagadas (esas son egresos reales del pasado)
+ * - Elimina el documento de la compra
+ */
+export async function eliminarCompraCuotas(
+  userId: string,
+  compra: CompraCuotas
+): Promise<void> {
+  const batch = writeBatch(db)
+  
+  // 1. Calcular cuánto debemos devolver al cupo
+  // Solo lo que falta por pagar (las cuotas ya pagadas son gastos reales del pasado)
+  const cuotasRestantes = compra.numeroCuotas - compra.cuotasPagadas
+  const montoADevolverAlCupo = Math.round(compra.valorCuota * cuotasRestantes)
+  
+  // 2. Devolver al cupo de la tarjeta
+  const cuentasSnapshot = await getDocs(collection(db, 'usuarios', userId, 'cuentas'))
+  const tarjetaDoc = cuentasSnapshot.docs.find((d) => d.id === compra.cuentaId)
+  
+  if (tarjetaDoc) {
+    const tarjeta = tarjetaDoc.data() as { cupoDisponible?: number }
+    const cupoActual = tarjeta.cupoDisponible ?? 0
+    const tarjetaRef = doc(db, 'usuarios', userId, 'cuentas', compra.cuentaId)
+    batch.update(tarjetaRef, {
+      cupoDisponible: Math.round(cupoActual + montoADevolverAlCupo),
+    })
+  }
+  
+  // 3. Eliminar el documento de la compra a cuotas
+  const compraRef = doc(db, 'usuarios', userId, 'comprasCuotas', compra.id)
+  batch.delete(compraRef)
+  
+  // 4. Eliminar SOLO el movimiento original vinculado (no las cuotas ya pagadas)
+  const movimientosQuery = query(
+    collection(db, 'usuarios', userId, 'movimientos'),
+    where('compraCuotasId', '==', compra.id)
+  )
+  const movimientosSnapshot = await getDocs(movimientosQuery)
+  
+  for (const movDoc of movimientosSnapshot.docs) {
+    const data = movDoc.data()
+    // Solo eliminamos el movimiento original (no las cuotas pagadas)
+    if (!data.descripcion.startsWith('Cuota ')) {
+      batch.delete(movDoc.ref)
+    }
   }
   
   await batch.commit()

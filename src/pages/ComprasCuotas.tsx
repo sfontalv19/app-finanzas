@@ -1,11 +1,18 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Layers, Loader2, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Layers, Loader2, CheckCircle2, MoreVertical, Pencil, Trash2 } from 'lucide-react'
 import CuotaItem from '../components/CuotaItem'
 import Modal from '../components/ui/Modal'
 import PagarCuotaForm from '../components/forms/PagarCuotaForm'
+import CompraCuotasForm from '../components/forms/CompraCuotasForm'
 import { useCuentas } from '../hooks/useCuentas'
-import { useComprasCuotas, usePagarCuota } from '../hooks/useComprasCuotas'
+import { useCategorias } from '../hooks/useCategorias'
+import {
+  useComprasCuotas,
+  usePagarCuota,
+  useActualizarCompraCuotas,
+  useEliminarCompraCuotas,
+} from '../hooks/useComprasCuotas'
 import { formatearDinero } from '../utils/formatters'
 import { calcularCuotasDelMes } from '../utils/cuotas'
 import type { CompraCuotas } from '../types'
@@ -16,10 +23,15 @@ export default function ComprasCuotas() {
   const navigate = useNavigate()
   const [filtro, setFiltro] = useState<FiltroEstado>('activas')
   const [compraSeleccionada, setCompraSeleccionada] = useState<CompraCuotas | null>(null)
+  const [compraEditando, setCompraEditando] = useState<CompraCuotas | null>(null)
+  const [menuAbierto, setMenuAbierto] = useState<string | null>(null)
   
   const { data: comprasCuotas, isLoading } = useComprasCuotas()
   const { data: cuentas } = useCuentas()
+  const { data: categorias } = useCategorias()
   const pagarMutation = usePagarCuota()
+  const actualizarMutation = useActualizarCompraCuotas()
+  const eliminarMutation = useEliminarCompraCuotas()
   
   const comprasFiltradas = (comprasCuotas ?? []).filter((c) => {
     if (filtro === 'activas') return c.activa
@@ -65,6 +77,48 @@ export default function ComprasCuotas() {
       console.error('Error al pagar cuota:', err)
       const mensaje = err instanceof Error ? err.message : 'No se pudo registrar el pago.'
       alert(mensaje)
+    }
+  }
+  
+  const handleEditar = async (datos: {
+    montoTotal: number
+    numeroCuotas: number
+    valorCuota?: number
+    tieneIntereses: boolean
+    categoriaId: string
+    descripcion: string
+  }) => {
+    if (!compraEditando) return
+    
+    try {
+      await actualizarMutation.mutateAsync({
+        compraOriginal: compraEditando,
+        datosNuevos: datos,
+      })
+      setCompraEditando(null)
+    } catch (err) {
+      console.error('Error al editar compra:', err)
+      const mensaje = err instanceof Error ? err.message : 'No se pudo editar la compra.'
+      alert(mensaje)
+    }
+  }
+  
+  const handleEliminar = async (compra: CompraCuotas) => {
+    setMenuAbierto(null)
+    
+    const cuotasRestantes = compra.numeroCuotas - compra.cuotasPagadas
+    const mensaje = compra.cuotasPagadas > 0
+      ? `¿Eliminar "${compra.descripcion}"?\n\nYa pagaste ${compra.cuotasPagadas} cuotas (esas no se devolverán).\nSe devolverán al cupo ${formatearDinero(compra.valorCuota * cuotasRestantes)} de las ${cuotasRestantes} cuotas restantes.`
+      : `¿Eliminar "${compra.descripcion}"?\n\nSe devolverá al cupo de la tarjeta ${formatearDinero(compra.montoTotal)}.`
+    
+    if (!confirm(mensaje)) return
+    
+    try {
+      await eliminarMutation.mutateAsync(compra)
+    } catch (err) {
+      console.error('Error al eliminar compra:', err)
+      const mensajeError = err instanceof Error ? err.message : 'No se pudo eliminar la compra.'
+      alert(mensajeError)
     }
   }
   
@@ -201,14 +255,56 @@ export default function ComprasCuotas() {
               return (
                 <div key={compra.id} className="relative">
                   <CuotaItem compra={compra} cuenta={cuenta} />
-                  {compra.activa && (
+                  
+                  {/* Botones de acción */}
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                    {compra.activa && (
+                      <button
+                        onClick={() => setCompraSeleccionada(compra)}
+                        className="px-2.5 py-1 bg-gradient-to-r from-purple-400 to-pink-400 text-white text-[10px] font-semibold rounded-full shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-1"
+                      >
+                        <CheckCircle2 className="w-3 h-3" strokeWidth={2.5} />
+                        Pagar
+                      </button>
+                    )}
                     <button
-                      onClick={() => setCompraSeleccionada(compra)}
-                      className="absolute top-3 right-3 px-2.5 py-1 bg-gradient-to-r from-purple-400 to-pink-400 text-white text-[10px] font-semibold rounded-full shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setMenuAbierto(menuAbierto === compra.id ? null : compra.id)
+                      }}
+                      className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 active:scale-95 transition-all bg-white"
                     >
-                      <CheckCircle2 className="w-3 h-3" strokeWidth={2.5} />
-                      Pagar
+                      <MoreVertical className="w-4 h-4 text-gray-400" />
                     </button>
+                  </div>
+                  
+                  {/* Menú dropdown */}
+                  {menuAbierto === compra.id && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setMenuAbierto(null)}
+                      />
+                      <div className="absolute right-2 top-12 w-44 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-20">
+                        <button
+                          onClick={() => {
+                            setCompraEditando(compra)
+                            setMenuAbierto(null)
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <Pencil className="w-4 h-4" />
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => handleEliminar(compra)}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-rose-600 hover:bg-rose-50 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Eliminar
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
               )
@@ -230,6 +326,23 @@ export default function ComprasCuotas() {
             onSubmit={handlePagar}
             onCancel={() => setCompraSeleccionada(null)}
             cargando={pagarMutation.isPending}
+          />
+        )}
+      </Modal>
+      
+      {/* Modal de editar compra a cuotas */}
+      <Modal
+        isOpen={!!compraEditando}
+        onClose={() => setCompraEditando(null)}
+        title="Editar compra a cuotas"
+      >
+        {compraEditando && categorias && (
+          <CompraCuotasForm
+            compra={compraEditando}
+            categorias={categorias}
+            onSubmit={handleEditar}
+            onCancel={() => setCompraEditando(null)}
+            cargando={actualizarMutation.isPending}
           />
         )}
       </Modal>

@@ -62,7 +62,7 @@ export const movimientoSchema = z.object({
   
   // Campos para compra a cuotas
   esCompraCuotas: z.boolean().optional(),
-  numeroCuotas: z.number().int().min(2).max(48).optional(),
+  numeroCuotas: z.number().int().min(1).max(48).optional(),
   valorCuota: z.number().optional(),
   tieneIntereses: z.boolean().optional(),
 }).refine(
@@ -93,7 +93,7 @@ export const movimientoSchema = z.object({
   (data) => {
     // Si es compra a cuotas, validar campos
     if (data.esCompraCuotas) {
-      if (!data.numeroCuotas || data.numeroCuotas < 2) return false
+      if (!data.numeroCuotas || data.numeroCuotas < 1) return false
       if (data.tieneIntereses && (!data.valorCuota || data.valorCuota <= 0)) return false
     }
     return true

@@ -1,24 +1,87 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Loader2 } from 'lucide-react'
 import BalanceCard from '../components/BalanceCard'
 import AccountCard from '../components/AccountCard'
-import CuotaItem from '../components/CuotaItem'
+import CuotaItemConAcciones from '../components/CuotaItemConAcciones'
 import MovimientoItem from '../components/MovimientoItem'
 import GraficoGastos from '../components/GraficoGastos'
+import Modal from '../components/ui/Modal'
+import PagarCuotaForm from '../components/forms/PagarCuotaForm'
+import CompraCuotasForm from '../components/forms/CompraCuotasForm'
 import { useCuentas } from '../hooks/useCuentas'
 import { useCategorias } from '../hooks/useCategorias'
 import { useMovimientos } from '../hooks/useMovimientos'
-import { useComprasCuotas } from '../hooks/useComprasCuotas'
+import {
+  useComprasCuotas,
+  usePagarCuota,
+  useActualizarCompraCuotas,
+  useEliminarCompraCuotas,
+} from '../hooks/useComprasCuotas'
 import { calcularCuotasDelMes } from '../utils/cuotas'
 import { agruparGastosPorCategoria } from '../utils/graficos'
 import { formatearDinero } from '../utils/formatters'
-import type { Movimiento } from '../types'
+import type { Movimiento, CompraCuotas } from '../types'
 
 export default function Dashboard() {
   const { data: cuentas, isLoading: cargandoCuentas } = useCuentas()
   const { data: movimientos, isLoading: cargandoMovimientos } = useMovimientos()
   const { data: categorias } = useCategorias()
   const { data: comprasCuotas } = useComprasCuotas()
+  
+  // Estados para los modales de cuotas
+  const [compraParaPagar, setCompraParaPagar] = useState<CompraCuotas | null>(null)
+  const [compraEditando, setCompraEditando] = useState<CompraCuotas | null>(null)
+  
+  // Mutaciones
+  const pagarMutation = usePagarCuota()
+  const actualizarMutation = useActualizarCompraCuotas()
+  const eliminarMutation = useEliminarCompraCuotas()
+  
+  // Handlers
+  const handlePagar = async (cuentaPagoId: string) => {
+    if (!compraParaPagar) return
+    try {
+      await pagarMutation.mutateAsync({
+        compraCuotas: compraParaPagar,
+        cuentaPagoId,
+      })
+      setCompraParaPagar(null)
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : 'No se pudo registrar el pago.'
+      alert(mensaje)
+    }
+  }
+  
+  const handleEditar = async (datos: {
+    montoTotal: number
+    numeroCuotas: number
+    valorCuota?: number
+    tieneIntereses: boolean
+    categoriaId: string
+    descripcion: string
+  }) => {
+    if (!compraEditando) return
+    try {
+      await actualizarMutation.mutateAsync({
+        compraOriginal: compraEditando,
+        datosNuevos: datos,
+      })
+      setCompraEditando(null)
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : 'No se pudo editar.'
+      alert(mensaje)
+    }
+  }
+  
+  const handleEliminar = async (compra: CompraCuotas) => {
+    try {
+      await eliminarMutation.mutateAsync(compra)
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : 'No se pudo eliminar.'
+      alert(mensaje)
+    }
+  }
   
   const cargando = cargandoCuentas || cargandoMovimientos
   
@@ -126,6 +189,7 @@ export default function Dashboard() {
   }
   
   return (
+    <>
     <div className="px-4 pt-6 pb-4 space-y-6">
       
       {/* Header */}
@@ -229,7 +293,14 @@ export default function Dashboard() {
             {comprasActivas.map((compra) => {
               const cuenta = cuentas?.find((c) => c.id === compra.cuentaId)
               return (
-                <CuotaItem key={compra.id} compra={compra} cuenta={cuenta} />
+                <CuotaItemConAcciones
+                  key={compra.id}
+                  compra={compra}
+                  cuenta={cuenta}
+                  onPagar={setCompraParaPagar}
+                  onEditar={setCompraEditando}
+                  onEliminar={handleEliminar}
+                />
               )
             })}
           </div>
@@ -277,5 +348,40 @@ export default function Dashboard() {
       )}
       
     </div>
+    
+    {/* Modal de pagar cuota */}
+    <Modal
+      isOpen={!!compraParaPagar}
+      onClose={() => setCompraParaPagar(null)}
+      title="Pagar cuota"
+    >
+      {compraParaPagar && (
+        <PagarCuotaForm
+          compra={compraParaPagar}
+          cuentas={cuentas ?? []}
+          onSubmit={handlePagar}
+          onCancel={() => setCompraParaPagar(null)}
+          cargando={pagarMutation.isPending}
+        />
+      )}
+    </Modal>
+    
+    {/* Modal de editar compra a cuotas */}
+    <Modal
+      isOpen={!!compraEditando}
+      onClose={() => setCompraEditando(null)}
+      title="Editar compra a cuotas"
+    >
+      {compraEditando && categorias && (
+        <CompraCuotasForm
+          compra={compraEditando}
+          categorias={categorias}
+          onSubmit={handleEditar}
+          onCancel={() => setCompraEditando(null)}
+          cargando={actualizarMutation.isPending}
+        />
+      )}
+    </Modal>
+    </>
   )
 }  

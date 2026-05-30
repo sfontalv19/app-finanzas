@@ -335,7 +335,9 @@ export default function AgregarMovimiento() {
                 type="number"
                 step="1"
                 {...register('numeroCuotas', { valueAsNumber: true })}
-                placeholder="Ej: 6"
+                placeholder="Ej: 6 (mínimo 1)"
+                min="1"
+                max="48"
                 className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-transparent transition"
               />
               {errors.numeroCuotas && (
@@ -410,7 +412,7 @@ export default function AgregarMovimiento() {
                   {formatearDinero(valorCuotaCalculado)}
                 </p>
                 <p className="text-[10px] text-gray-400 mt-0.5">
-                  durante {numeroCuotas} meses
+                  {numeroCuotas === 1 ? 'pago único' : `durante ${numeroCuotas} meses`}
                 </p>
               </div>
             )}

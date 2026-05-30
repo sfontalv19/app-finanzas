@@ -4,6 +4,8 @@ import {
   obtenerComprasCuotas,
   crearCompraCuotas,
   pagarCuota,
+  actualizarCompraCuotas,
+  eliminarCompraCuotas,
 } from '../services/comprasCuotasService'
 import type { CompraCuotas } from '../types'
 import type { MovimientoFormData } from '../lib/schemas'
@@ -52,6 +54,56 @@ export function usePagarCuota() {
   return useMutation({
     mutationFn: ({ compraCuotas, cuentaPagoId }: { compraCuotas: CompraCuotas; cuentaPagoId: string }) =>
       pagarCuota(userId!, compraCuotas, cuentaPagoId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comprasCuotas', userId] })
+      queryClient.invalidateQueries({ queryKey: ['movimientos', userId] })
+      queryClient.invalidateQueries({ queryKey: ['cuentas', userId] })
+    },
+  })
+}
+
+/**
+ * Hook para actualizar una compra a cuotas.
+ */
+export function useActualizarCompraCuotas() {
+  const { usuario } = useAuth()
+  const queryClient = useQueryClient()
+  const userId = usuario?.uid
+  
+  return useMutation({
+    mutationFn: ({
+      compraOriginal,
+      datosNuevos,
+    }: {
+      compraOriginal: CompraCuotas
+      datosNuevos: {
+        montoTotal: number
+        numeroCuotas: number
+        valorCuota?: number
+        tieneIntereses: boolean
+        categoriaId: string
+        descripcion: string
+      }
+    }) => actualizarCompraCuotas(userId!, compraOriginal, datosNuevos),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comprasCuotas', userId] })
+      queryClient.invalidateQueries({ queryKey: ['movimientos', userId] })
+      queryClient.invalidateQueries({ queryKey: ['cuentas', userId] })
+    },
+  })
+}
+
+/**
+ * Hook para eliminar una compra a cuotas.
+ * Devuelve al cupo lo que faltaba por pagar y borra el movimiento original.
+ */
+export function useEliminarCompraCuotas() {
+  const { usuario } = useAuth()
+  const queryClient = useQueryClient()
+  const userId = usuario?.uid
+  
+  return useMutation({
+    mutationFn: (compra: CompraCuotas) => eliminarCompraCuotas(userId!, compra),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['comprasCuotas', userId] })
       queryClient.invalidateQueries({ queryKey: ['movimientos', userId] })
