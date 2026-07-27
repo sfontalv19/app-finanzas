@@ -254,7 +254,7 @@ export default function Dashboard() {
             <h2 className="text-base font-semibold text-gray-800">
               Gastos por categoría
             </h2>
-            <span className="text-xs text-gray-400 capitalize">
+            <span className="text-xs text-gray-400 ">
               {nombreMes}
             </span>
           </div>
