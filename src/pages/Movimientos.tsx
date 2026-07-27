@@ -241,7 +241,7 @@ export default function Movimientos() {
           <div className="space-y-5">
             {movimientosAgrupados.map((grupo) => (
               <section key={grupo.clave}>
-                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2.5 px-1 capitalize">
+                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2.5 px-1">
                   {new Intl.DateTimeFormat('es-CO', { month: 'long', year: 'numeric' }).format(grupo.fecha)}
                 </h2>
                 <div className="space-y-2">

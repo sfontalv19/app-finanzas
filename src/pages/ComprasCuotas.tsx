@@ -189,7 +189,7 @@ export default function ComprasCuotas() {
               </div>
               {proximosMeses.slice(0, 2).map((mes) => (
                 <div key={mes.nombre} className="bg-white/70 backdrop-blur-sm rounded-xl p-2.5 text-center">
-                  <p className="text-[10px] font-medium text-gray-500 uppercase capitalize">
+                  <p className="text-[10px] font-medium text-gray-500 uppercase">
                     {mes.nombre}
                   </p>
                   <p className="text-sm font-bold text-gray-800 mt-0.5">

@@ -78,7 +78,7 @@ export default function SelectorFecha({ fecha, onChange, label = 'Fecha' }: Sele
           <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
             <Calendar className="w-4 h-4 text-purple-500" strokeWidth={2.5} />
           </div>
-          <span className="flex-1 text-left text-gray-800 font-medium capitalize">
+          <span className="flex-1 text-left text-gray-800 font-medium">
             {formatearFechaLabel(fecha)}
           </span>
           <ChevronDown className="w-4 h-4 text-gray-400" />

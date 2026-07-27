@@ -263,7 +263,6 @@ export default function Dashboard() {
         </section>
       )}
       
-      {/* Compras a cuotas (todavía mock) */}
       {comprasActivas.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3">
