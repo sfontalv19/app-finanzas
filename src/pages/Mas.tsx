@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronRight, Tag, Layers, User, LogOut, Bell, HelpCircle, Sparkles, Loader2 } from 'lucide-react'
+import { ChevronRight, Tag, Layers, User, LogOut, Bell, HelpCircle, Sparkles, Loader2, Calendar } from 'lucide-react'
 import { cerrarSesion } from '../services/authService'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -116,6 +116,14 @@ export default function Mas() {
           description="Gestiona tus pagos diferidos"
           iconBg="#A78BFA20"
           iconColor="#8B5CF6"
+        />
+        <MenuItem
+          to="/historial"
+          icon={<Calendar className="w-5 h-5" strokeWidth={2.5} />}
+          label="Historial mensual"
+          description="Consulta tus ingresos y egresos por mes"
+          iconBg="#86EFAC20"
+          iconColor="#10B981"
         />
       </section>
       

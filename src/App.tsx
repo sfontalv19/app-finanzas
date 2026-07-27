@@ -12,6 +12,7 @@ import Movimientos from './pages/Movimientos'
 import Mas from './pages/Mas'
 import Categorias from './pages/Categorias'
 import ComprasCuotas from './pages/ComprasCuotas'
+import HistorialMensual from './pages/HistorialMensual'
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
           <Route path="/mas" element={<Mas/>} />
           <Route path="/categorias" element={<Categorias />} />
           <Route path="/compras-cuotas" element={<ComprasCuotas />} />
+          <Route path="/historial" element={<HistorialMensual />} />
         </Route>
       </Route>
     </Routes>
